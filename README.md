@@ -98,11 +98,18 @@ JUDGE_MODEL=gpt-4.1-mini
 OPENAI_API_KEY=your_openai_api_key_here
 OPENAI_BASE_URL=
 
+# Hugging Face Access Token (Required for local gated models like Llama-3 in SGLang)
+HF_TOKEN=your_hugging_face_token_here
+
 # CORS Allowed Origins
 ALLOWED_ORIGINS=http://localhost,http://localhost:80,http://localhost:5173
 
 # Frontend variables
 VITE_API_URL=http://localhost:8000
+
+# Redis & Queue Configuration
+REDIS_URL=redis://redis:6379/0
+# REDIS_URL=redis://localhost:6379/0  # Uncomment for local dev run outside Docker
 ```
 
 ### Step 2: Build and Launch the Stack
@@ -111,6 +118,11 @@ Run the following command in the project root:
 ```bash
 docker-compose up --build
 ```
+
+> [!IMPORTANT]
+> **Vite Environment Variables & Docker Rebuilds**:
+> Vite compiles environment variables (prefixed with `VITE_`) into static JavaScript assets *at build-time*. If you modify `VITE_API_URL` or other settings in `.env`, you must rebuild the frontend container using `docker-compose up --build` or `docker compose build frontend` for changes to take effect in the client.
+
 
 This starts:
 - **Database (PostgreSQL)** at `localhost:5432`
@@ -230,6 +242,7 @@ services:
               capabilities: [gpu]
     environment:
       - NCCL_DEBUG=INFO
+      - HF_TOKEN=${HF_TOKEN}
     volumes:
       - ~/.cache/huggingface:/root/.cache/huggingface
     ports:
@@ -319,8 +332,12 @@ pip install -r requirements.txt
 ```
 
 ### Run Tests
-```powershell
+```bash
+# Windows (PowerShell)
 $env:PYTHONPATH="." ; pytest backend/tests
+
+# Linux / macOS / Git Bash
+PYTHONPATH=. pytest backend/tests
 ```
 
 ### Setup Frontend Environment

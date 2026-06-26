@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  sglang:
+    image: lmsysorg/sglang:latest
+    container_name: arbiter_sglang
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - NCCL_DEBUG=INFO
+      - HF_TOKEN=${HF_TOKEN}
+    volumes:
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    ports:
+      - "30000:30000"
+    ipc: host # Enable shared memory for fast pre-fill cache
+    command: python3 -m sglang.launch_server --model-path meta-llama/Meta-Llama-3-8B-Instruct --port 30000 --host 0.0.0.0 --mem-fraction-static 0.8
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: arbiter_ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - ollama_storage:/root/.ollama
+    ports:
+      - "11434:11434"
+
+volumes:
+  ollama_storage:
