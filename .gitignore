@@ -1,0 +1,67 @@
+# Environments & Secrets
+.env
+.env.*
+!.env.example
+secrets.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Pytest / Coverage
+.pytest_cache/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.hypothesis/
+
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+/frontend/dist/
+dist-ssr/
+*.local
+
+# IDEs & Editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
+.DS_Store
+
+# OS specific files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Docker / Postgres data
+postgres_data/

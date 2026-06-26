@@ -1,0 +1,104 @@
+name: ARBITER PR Gate Regression Check
+
+on:
+  pull_request:
+    branches: [ main, dev ]
+
+jobs:
+  run-adversarial-eval:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: arbiter
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install Backend Requirements
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r backend/requirements.txt
+
+    - name: Install Arbiter CLI
+      run: |
+        pip install ./cli
+
+    - name: Start Arbiter FastAPI Server
+      env:
+        DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/arbiter
+        REDIS_URL: redis://localhost:6379/0
+        JUDGE_PROVIDER: openai
+        JUDGE_MODEL: gpt-3.5-turbo
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      run: |
+        cd backend
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+        sleep 5  # Allow migrations to run and server to bind
+
+    - name: Start Celery worker
+      env:
+        DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/arbiter
+        REDIS_URL: redis://localhost:6379/0
+        JUDGE_PROVIDER: openai
+        JUDGE_MODEL: gpt-3.5-turbo
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      run: |
+        cd backend
+        celery -A app.core.celery_app.celery_app worker --loglevel=info &
+        sleep 5
+
+    - name: Run Backend Unit Tests
+      env:
+        DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/arbiter
+        REDIS_URL: redis://localhost:6379/0
+        JUDGE_PROVIDER: openai
+        JUDGE_MODEL: gpt-3.5-turbo
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      run: |
+        cd backend
+        PYTHONPATH=. pytest
+
+    - name: Assert Target Model Regression
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      run: |
+        # Triggers evaluation against local target, auto-resolves baseline run on main branch,
+        # prints comparative report, and exits with 1 if there's a statistically significant regression
+        arbiter evaluate \
+          --api-url http://localhost:8000 \
+          --project-id 1 \
+          --suite-id 1 \
+          --target-url http://localhost:8000/health \
+          --commit-sha ${{ github.event.pull_request.head.sha }} \
+          --branch ${{ github.head_ref }} \
+          --poll-interval 5 \
+          --timeout 120
