@@ -9,6 +9,7 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 from backend.app.api.endpoints import router as api_router
 from backend.app.api.runs import router as runs_router
+from backend.app.api.gateway import router as gateway_router
 from backend.app.core.database import init_db
 from backend.app.core.config import settings
 
@@ -56,6 +57,7 @@ app.add_middleware(
 # Mount core API endpoints
 app.include_router(api_router, prefix="/api")
 app.include_router(runs_router, prefix="/api/runs")
+app.include_router(gateway_router, prefix="/api")
 
 # Instrument FastAPI with OpenTelemetry
 FastAPIInstrumentor.instrument_app(app)

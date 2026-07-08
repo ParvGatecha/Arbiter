@@ -1,4 +1,4 @@
-# ⚖️ ARBITER: Self-Hosted Production-Grade LLM Evaluation Platform
+# ⚖️ ARBITER: Enterprise AI Trust Platform & Operating System
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev/)
@@ -8,49 +8,50 @@
 [![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-F15A24?style=for-the-badge&logo=opentelemetry&logoColor=white)](https://opentelemetry.io/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 
-ARBITER is a production-ready, self-hosted LLM evaluation framework. It automates adversarial test generation, executes evaluation runs through a reliable asynchronous Celery task pipeline, analyzes performance regressions using non-parametric statistical hypothesis testing, and functions as an automated gate in CI/CD pipelines.
+ARBITER is a production-ready, self-hosted LLM evaluation framework and Enterprise AI Trust Platform. It secures, policy-checks, audits, and monitors model interactions in real time via a sub-millisecond reverse proxy gateway while retaining its reliable asynchronous Celery evaluation pipelines, adversarial red-teaming generation, and statistical regression testing gates.
 
 ---
 
 ## 🏛️ Architectural Overview
 
-ARBITER consists of five main components working in tandem:
+ARBITER integrates three primary execution planes:
 
 ```
-                          +------------------------+
-                          |   Developer / CI CLI   |
-                          +-----------+------------+
-                                      |
-                                      v (POST /api/runs)
-+-----------------------+  HTTP  +----+-------------------+
-|  React Web Dashboard  +------->|   FastAPI Backend Server|
-| (Served on Port 80)   |        +----+-----------+--------+
-+-----------------------+             |           |
-                                      | Celery    | SQLModel
-                                      v           v
-                                 +----+---+  +----+----+
-                                 | Redis  |  |Postgres |
-                                 +----+---+  +---------+
-                                      |
-                                      v
-                               +------+--------+
-                               | Celery Worker |
-                               +------+--------+
-                                      |
-                       +--------------+--------------+
-                       v                             v
-           +-----------+-----------+     +-----------+-----------+
-           | Target Model Endpoint |     | LLM Judge Model (OTel)|
-           | (Ollama / SGLang/OAI) |     | (Ollama / SGLang/OAI) |
-           +-----------------------+     +-----------------------+
+                            +--------------------------+
+                            |    Agent Client / SDK    |
+                            +------------+-------------+
+                                         |
+                                         v (POST /api/gateway/chat/completions)
++-----------------------+   HTTP   +-----+---------------------+   OpenTelemetry
+|  React Web Dashboard  |<-------->|   Arbiter Secure Gateway  +--------------> [OTel Collector]
+| (Served on Port 80)   |          +-----+----------+----------+
++-----------------------+                |          |
+                                         |          | SQLModel
+                                         v          v
+                                    +----+---+  +----+----+
+                                    | Redis  |  |Postgres |
+                                    +----+---+  +---------+
+                                         |
+                                         v
+                                  +------+--------+
+                                  | Celery Worker |
+                                  +------+--------+
+                                         |
+                          +--------------+--------------+
+                          v                             v
+              +-----------+-----------+     +-----------+-----------+
+              | Target Model Endpoint |     | LLM Judge Model (OTel)|
+              | (Ollama / SGLang/OAI) |     | (Ollama / SGLang/OAI) |
+              +-----------------------+     +-----------------------+
 ```
 
-1. **FastAPI Backend (`backend/`)**: Manages the API endpoints, triggers runs, resolves statistical calculations, and maintains projects and evaluation results.
-2. **Celery Worker & Redis Broker (`backend/app/tasks/`)**: Offloads evaluation runs into queues to handle long-running LLM calls asynchronously without blocking HTTP threads.
-3. **Pydantic AI Red-Teamer (`backend/app/services/adversarial.py`)**: Automatically crafts targeted adversarial prompt variations (jailbreaks, edge cases, and implicit violations) based on application intent definitions.
-4. **Statistical Regression Engine (`backend/app/services/statistics.py`)**: Uses non-parametric Wilcoxon/Mann-Whitney U tests alongside bootstrap resampling to determine if a candidate run has significantly regressed compared to a baseline.
-5. **Nginx-Served React Dashboard (`frontend/`)**: Renders project layouts, latency reports, evaluation breakdowns, and Recharts statistical confidence intervals.
-6. **Typer CLI (`cli/`)**: A developer-facing CLI tool to trigger runs and block CI pipelines (exiting with code `1` if a regression is detected).
+1. **Arbiter Secure Gateway Proxy (`backend/app/api/gateway.py`)**: Intercepts chat completions, executes inline security scans, checks rules against dynamic YAML policies, routes requests to LLM providers (OpenAI, Anthropic, Gemini, Ollama), audits generated outputs, and returns audited payloads.
+2. **FastAPI Control Plane Server (`backend/app/main.py`)**: Orchestrates admin routing, API key configuration, organizations, test suites, policy rules, and historical audit lookups.
+3. **Celery Worker & Redis Broker (`backend/app/tasks/`)**: Handles long-running evaluation suites, statistical drift calculations, and adversarial testing asynchronously.
+4. **Security Scanner Shield (`backend/app/services/security_scanner.py`)**: Rule-based and pattern matching detection for prompt injections, jailbreaks, PII (SSN, credit card, email) masking, credentials leakage, and HTML/Unicode obfuscations mapped directly to MITRE ATT&CK and OWASP LLM Top 10 vectors.
+5. **Declarative Policy Engine (`backend/app/services/policy_evaluator.py`)**: Compiles and simulates active project-level YAML files to block, mask, flag, or request approval for transactions.
+6. **Secure Cryptographic Memory (`backend/app/services/memory_manager.py`)**: Encrypts agent memory fragments with Fernet (AES-128) and signs payloads using HMAC-SHA256 integrity signatures to defend against memory poisoning.
+7. **Statistical Regression Engine (`backend/app/services/statistics.py`)**: Compares score distributions using non-parametric Wilcoxon rank-sum analysis and bootstrap resampling to flag regressions compared to baseline runs.
 
 ---
 
@@ -60,28 +61,30 @@ ARBITER consists of five main components working in tandem:
 Arbiter/
 ├── backend/
 │   ├── app/
-│   │   ├── api/          # FastAPI routers (endpoints, runs)
-│   │   ├── core/         # Settings configuration, database engine, Celery app
-│   │   ├── models/       # SQLModel database schemas (Project, TestSuite, TestCase, Runs)
-│   │   ├── services/     # Red-teaming, inference, evaluator service, statistics engine
+│   │   ├── api/          # FastAPI routers (endpoints, runs, gateway proxy)
+│   │   ├── core/         # Core settings, database connection, Celery configuration
+│   │   ├── models/       # SQLModel database schemas (Project, Org, Policy, Log, Memory)
+│   │   ├── services/     # Security scanner, YAML policy evaluator, memory manager, stats
 │   │   └── tasks/        # Celery task definitions
-│   └── tests/            # Pytest suite
+│   └── tests/            # Pytest test suite (including test_security_gateway.py)
 ├── frontend/
 │   ├── src/              # React code (App, components, pages)
-│   ├── Dockerfile        # Production multi-stage container build (Vite + Nginx)
+│   ├── Dockerfile        # Production Vite + Nginx container config
 │   └── index.html
 ├── cli/
-│   ├── arbiter_cli/      # Typer CLI application source code
+│   ├── arbiter_cli/      # Typer CLI application
 │   └── pyproject.toml    # CLI package configuration
+├── deploy/
+│   └── k8s/              # Kubernetes manifests (deployments, configmaps, services)
 ├── .env                  # Project secrets and system configurations
-└── docker-compose.yml    # Main services orchestrator
+└── docker-compose.yml    # Core local development stack orchestrator
 ```
 
 ---
 
 ## ⚡ 1. Quickstart (Docker Compose)
 
-The easiest way to get ARBITER running is using Docker Compose. All secrets and dynamic variables are loaded from the root `.env` file.
+Launch the core Arbiter backend database, Redis queue broker, and React dashboard:
 
 ### Step 1: Create your `.env` file
 Duplicate the configurations below into a file named `.env` in the root folder of the project:
@@ -92,101 +95,74 @@ POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres_prod_secure_pass
 POSTGRES_DB=arbiter
 
+# Security Ciphers
+SECRET_KEY=arbiter-secret-key-jwt-signing-token-verification-12345
+ENCRYPTION_KEY=Z3VpZGVsaW5lc19mb3JfZW5jcnlwdGlvbl9rZXlfMzJieXRlcw==
+
 # LLM Configs for red-teaming and alignment judging
 JUDGE_PROVIDER=openai
-JUDGE_MODEL=gpt-4.1-mini
+JUDGE_MODEL=gpt-4o-mini
 OPENAI_API_KEY=your_openai_api_key_here
 OPENAI_BASE_URL=
 
-# Hugging Face Access Token (Required for local gated models like Llama-3 in SGLang)
-HF_TOKEN=your_hugging_face_token_here
-
-# CORS Allowed Origins
-ALLOWED_ORIGINS=http://localhost,http://localhost:80,http://localhost:5173
+# Provider keys for Gateway routing
+ANTHROPIC_API_KEY=your_anthropic_key_here
+GEMINI_API_KEY=your_gemini_key_here
 
 # Frontend variables
 VITE_API_URL=http://localhost:8000
-
-# Redis & Queue Configuration
 REDIS_URL=redis://redis:6379/0
-# REDIS_URL=redis://localhost:6379/0  # Uncomment for local dev run outside Docker
 ```
 
 ### Step 2: Build and Launch the Stack
-Run the following command in the project root:
-
 ```bash
 docker-compose up --build
 ```
 
-> [!IMPORTANT]
-> **Vite Environment Variables & Docker Rebuilds**:
-> Vite compiles environment variables (prefixed with `VITE_`) into static JavaScript assets *at build-time*. If you modify `VITE_API_URL` or other settings in `.env`, you must rebuild the frontend container using `docker-compose up --build` or `docker compose build frontend` for changes to take effect in the client.
-
-
-This starts:
-- **Database (PostgreSQL)** at `localhost:5432`
-- **Queue Broker (Redis)** at `localhost:6379`
-- **FastAPI API** at `http://localhost:8000`
-- **Nginx Web Server (React Static Assets)** at `http://localhost:80`
-- **Celery Worker** (running task queues)
-
 ---
 
-## 🧪 2. How to Configure & Test LLMs
+## 🛡️ 2. Gateway API & Policy Configuration
 
-ARBITER is fully configurable to support both local models (Ollama, SGLang) and external model APIs (OpenAI, Anthropic).
+Submit request transactions directly through the proxy to gain immediate safety metrics.
 
-### Testing `gpt-4o-mini` using `gpt-4.1-mini` as Judge
+### Gateway Completion Request
+```bash
+curl -X POST http://localhost:8000/api/gateway/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": 1,
+    "model": "gpt-4o",
+    "messages": [
+      {"role": "user", "content": "Hello, email me at contact@domain.com"}
+    ],
+    "temperature": 0.5
+  }'
+```
 
-To compare target applications running on `gpt-4o-mini` while using `gpt-4.1-mini` as your evaluation Judge:
-
-1. **Configure the Judge in `.env`**:
-   ```env
-   JUDGE_PROVIDER=openai
-   JUDGE_MODEL=gpt-4.1-mini
-   OPENAI_API_KEY=sk-proj-xxxx...
-   ```
-2. **Define target LLM in the Project setup**:
-   When creating or editing a project's `TestSuite` through the REST API or Dashboard, configure the `TargetModelConfig` json payload to request the desired model. For example:
-   ```json
-   {
-     "provider": "openai",
-     "model": "gpt-4o-mini",
-     "temperature": 0.0,
-     "api_key_env_var": "OPENAI_API_KEY"
-   }
-   ```
-3. When an evaluation run is triggered, the backend service will:
-   - Call the target endpoint (`gpt-4o-mini`) using the configuration parameters.
-   - Forward both the original input and the target's output to the judge client.
-   - Restrict the judge client to structured JSON conforming to `EvaluationJudgeOutput` via the fine-tuned `gpt-4.1-mini` model.
+### Example YAML Policy Definition
+```yaml
+name: strict-finance-shield
+scope: project
+rules:
+  - name: mask-emails
+    type: pii-detector
+    action: mask
+    types: [EMAIL]
+  - name: block-aws-keys
+    type: credential-scanner
+    action: block
+```
 
 ---
 
 ## 📈 3. Statistical Regression Engine
 
-Standard LLM evaluations rely on mean score changes, which are easily skewed by outliers and fail to prove statistical significance. ARBITER solves this by comparing score distributions using non-parametric analysis.
+Standard LLM evaluations rely on mean score changes, which are easily skewed by outliers. ARBITER solves this by comparing score distributions using non-parametric analysis:
 
-### The Mathematics
+1. **Mann-Whitney U Test (Wilcoxon Rank-Sum)**: Evaluates the null hypothesis $H_0$: the probability that a random draw from the candidate distribution is greater than a random draw from the baseline is equal to 0.5.
+2. **Bootstrap Confidence Interval**: Computes the distribution shift by bootstrapping the difference in means across 1,000 resamples.
 
-When a candidate evaluation run $Y = \{y_1, y_2, \dots, y_n\}$ is compared against a baseline run $X = \{x_1, x_2, \dots, x_m\}$:
-
-1. **Mann-Whitney U Test (Wilcoxon Rank-Sum)**:
-   We evaluate the null hypothesis $H_0$: the probability that a random draw from the candidate distribution is greater than a random draw from the baseline is equal to 0.5 ($P(Y > X) = 0.5$).
-   $$U = \sum_{i=1}^n \sum_{j=1}^m S(y_i, x_j)$$
-   where
-   $$S(y, x) = \begin{cases} 1 & \text{if } y > x \\ 0.5 & \text{if } y = x \\ 0 & \text{if } y < x \end{cases}$$
-   We reject the null hypothesis if the resulting $p\text{-value} < 0.05$.
-   
-2. **Bootstrap Confidence Interval**:
-   We calculate the distribution shift by bootstrapping the difference in means. We perform $B = 1000$ iterations:
-   - Resample $X^*$ from $X$ with replacement.
-   - Resample $Y^*$ from $Y$ with replacement.
-   - Calculate $\Delta^* = \text{mean}(Y^*) - \text{mean}(X^*)$.
-   - Sort all $\Delta^*$ values. The **95% Confidence Interval** is the range bounded by the 2.5th and 97.5th percentiles.
-
-If the p-value indicates significance ($p < 0.05$) and the confidence interval is entirely negative (below 0), the candidate run is flagged as a **statistically significant regression**.
+If the p-value indicates significance ($p < 0.05$) and the confidence interval is entirely negative, the candidate run is flagged as a **statistically significant regression**.
 
 ---
 
@@ -195,163 +171,40 @@ If the p-value indicates significance ($p < 0.05$) and the confidence interval i
 The CLI client allows developers to trigger and monitor runs from terminal sessions or automated integration runners.
 
 ### Installation
-Install the CLI locally in editable mode:
 ```bash
 pip install -e ./cli
 ```
 
-### Usage Examples
-
-1. **Trigger an evaluation run**:
-   ```bash
-   arbiter evaluate --project-id 1 --suite-id 2 --target-url "http://localhost:8000"
-   ```
-2. **Compare a Candidate run with a Baseline**:
-   ```bash
-   arbiter compare --candidate-run-id 42 --baseline-run-id 12
-   ```
-3. **Automated CI/CD Verification**:
-   Running comparisons returns exit code `1` if a significant performance regression is found, preventing broken updates from shipping:
-   ```bash
-   arbiter compare --candidate-run-id 42 --baseline-run-id 12 || echo "Regression detected, blocking deploy!"
-   ```
-
----
-
-## 🐋 5. Advanced GPU/VRAM Mounts for Local Models
-
-If you are running target models or judge models locally, you can use the NVIDIA GPU Container Toolkit to mount models into local inference environments.
-
-### SGLang / Ollama docker-compose.gpu.yml Integration
-
-Create a file named `docker-compose.gpu.yml` to spin up GPU accelerated inference nodes alongside ARBITER:
-
-```yaml
-version: '3.8'
-
-services:
-  sglang:
-    image: lmsysorg/sglang:latest
-    container_name: arbiter_sglang
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    environment:
-      - NCCL_DEBUG=INFO
-      - HF_TOKEN=${HF_TOKEN}
-    volumes:
-      - ~/.cache/huggingface:/root/.cache/huggingface
-    ports:
-      - "30000:30000"
-    ipc: host # Enforce shared memory for fast pre-fill prefix caching
-    command: python3 -m sglang.launch_server --model-path meta-llama/Meta-Llama-3-8B-Instruct --port 30000 --host 0.0.0.0 --mem-fraction-static 0.8
-
-  ollama:
-    image: ollama/ollama:latest
-    container_name: arbiter_ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    volumes:
-      - ollama_storage:/root/.ollama
-    ports:
-      - "11434:11434"
-
-volumes:
-  ollama_storage:
-```
-
----
-
-## 🔎 6. Observability
-
-ARBITER has built-in support for distributed trace extraction and logging targets.
-
-### OpenTelemetry
-Every evaluation runner execution is fully instrumented. Spans track model response times, API latencies, and Postgres read/write times.
-To export traces to **Jaeger** or another OTel Collector:
-1. Mount a Jaeger container:
-   ```yaml
-   jaeger:
-     image: jaegertracing/all-in-one:latest
-     ports:
-       - "16686:16686"
-       - "4317:4317"
-   ```
-2. Configure variables in `.env`:
-   ```env
-   OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-   ```
-
-### Weights & Biases (W&B) Logging
-To log evaluation results as interactive tables to Weights & Biases, execute a script inside your pipelines:
-
-```python
-import wandb
-import httpx
-
-def export_run_to_wandb(run_id: int, api_url: str = "http://localhost:8000"):
-    wandb.init(project="arbiter-evaluations", name=f"run-{run_id}")
-    
-    client = httpx.Client(base_url=api_url)
-    results = client.get(f"/api/runs/{run_id}/results").json()
-    
-    columns = ["ID", "Score", "Latency (ms)", "Tokens", "Cost ($)", "Rationale"]
-    data = []
-    for r in results:
-        data.append([
-            r["id"], r["score"], r["latency_ms"],
-            r["token_count"], r["cost"], r["rationale"]
-        ])
-        
-    table = wandb.Table(data=data, columns=columns)
-    wandb.log({"evaluation_results_table": table})
-    wandb.finish()
-```
-
----
-
-## 🛠️ 7. Local Development & Testing
-
-If you are modifying backend code or adding algorithms, you can run tests locally.
-
-### Setup Backend Environment
+### Automated CI/CD Verification
+Running comparisons returns exit code `1` if a significant performance regression is found, preventing broken updates from shipping:
 ```bash
+arbiter compare --candidate-run-id 42 --baseline-run-id 12 || echo "Regression detected, blocking deploy!"
+```
+
+---
+
+## ☸️ 5. Kubernetes Production Deployment
+
+Production manifests are located in `deploy/k8s/` to spin up high-availability clusters:
+
+```bash
+# Deploy all pods (Gateway, Backend, Celery, Redis Configs) to EKS
+kubectl apply -f deploy/k8s/deployment.yaml
+```
+
+---
+
+## 🧪 6. Local Development & Testing
+
+Run the security test suite inside the isolated python virtual environment:
+
+```bash
+# Setup backend venv
 cd backend
 python -m venv venv
 source venv/bin/activate  # Or `.\venv\Scripts\activate` on Windows
 pip install -r requirements.txt
+
+# Run security and gateway test suites
+PYTHONPATH=. pytest tests/test_security_gateway.py
 ```
-
-### Run Tests
-```bash
-# Windows (PowerShell)
-$env:PYTHONPATH="." ; pytest backend/tests
-
-# Linux / macOS / Git Bash
-PYTHONPATH=. pytest backend/tests
-```
-
-### Setup Frontend Environment
-To run the React app with hot reloading during local development:
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
----
-
-## 🤝 Contributing & Support
-
-We welcome contributions to ARBITER! If you want to add support for new LLM providers, statistical evaluation metrics, or Dashboard page layouts, please open a PR.
-
-*If you find ARBITER useful, consider dropping a ⭐ on the [GitHub repository](https://github.com/your-username/Arbiter) to help other engineers discover it!*
