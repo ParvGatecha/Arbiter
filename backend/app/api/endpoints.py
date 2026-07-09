@@ -5,7 +5,7 @@ from sqlmodel import Session
 from sqlmodel.ext.asyncio.session import AsyncSession
 from pydantic import BaseModel, Field
 
-from backend.app.core.database import get_db_session
+from backend.app.core.database import get_db_session, async_session_maker
 from backend.app.models.db_models import Project, TestSuite, TestCase, EvaluationRun, EvaluationResult
 from backend.app.services.adversarial import generate_adversarial_variants
 from backend.app.tasks.evaluation import run_evaluation_batch_task
@@ -126,21 +126,22 @@ async def generate_adversarial_tests_endpoint(
         )
 
     async def generate_and_save():
-        for intent_cat, intent_desc in suite.intent_definition.items():
-            try:
-                batch = await generate_adversarial_variants(intent_desc, suite.system_prompt)
-                for variant in batch.variants:
-                    db_case = TestCase(
-                        suite_id=suite.id,
-                        input_prompt=variant.input_prompt,
-                        intent_category=intent_cat,
-                        adversarial_flag=True
-                    )
-                    db.add(db_case)
-                await db.commit()
-            except Exception as e:
-                # Log and continue with next category
-                print(f"Error generating adversarial tests for {intent_cat}: {str(e)}")
+        async with async_session_maker() as session:
+            for intent_cat, intent_desc in suite.intent_definition.items():
+                try:
+                    batch = await generate_adversarial_variants(intent_desc, suite.system_prompt)
+                    for variant in batch.variants:
+                        db_case = TestCase(
+                            suite_id=suite.id,
+                            input_prompt=variant.input_prompt,
+                            intent_category=intent_cat,
+                            adversarial_flag=True
+                        )
+                        session.add(db_case)
+                    await session.commit()
+                except Exception as e:
+                    # Log and continue with next category
+                    print(f"Error generating adversarial tests for {intent_cat}: {str(e)}")
 
     background_tasks.add_task(generate_and_save)
     return {"message": "Adversarial test generation started in background."}

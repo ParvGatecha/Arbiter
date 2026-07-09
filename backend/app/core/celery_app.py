@@ -18,4 +18,7 @@ celery_app.conf.update(
     # Prevent tasks from blocking indefinitely
     task_time_limit=600,  # 10 minutes
     task_soft_time_limit=300,  # 5 minutes
+    # Optimize worker task allocation & durability
+    worker_prefetch_multiplier=1,
+    task_acks_late=True,
 )

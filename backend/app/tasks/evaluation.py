@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from datetime import datetime
+from sqlalchemy import delete
 from sqlalchemy.future import select
 from backend.app.core.celery_app import celery_app
 from backend.app.core.database import async_session_maker
@@ -24,9 +25,11 @@ async def run_evaluation_pipeline_async(run_id: int) -> None:
             return
 
         run.status = "RUNNING"
+        # Enforce task idempotency on Celery retries
+        await session.execute(delete(EvaluationResult).where(EvaluationResult.run_id == run_id))
         await session.commit()
         await session.refresh(run)
-        logger.info(f"Transitioned Run #{run_id} status to RUNNING.")
+        logger.info(f"Transitioned Run #{run_id} status to RUNNING (cleared any existing results).")
 
         try:
             # Fetch Test Suite

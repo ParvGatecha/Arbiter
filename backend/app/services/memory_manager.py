@@ -7,32 +7,19 @@ from typing import Dict, Any, Optional, Tuple
 
 logger = logging.getLogger("arbiter.memory_manager")
 
-# Cryptography optional import fallback
-try:
-    from cryptography.fernet import Fernet
-    HAS_CRYPTOGRAPHY = True
-except ImportError:
-    HAS_CRYPTOGRAPHY = False
-    logger.warning("cryptography library not installed. Falling back to lightweight base64-XOR encoding.")
+from cryptography.fernet import Fernet
 
 class SecureMemoryManager:
     def __init__(self, encryption_key: str, hmac_key: str = "arbiter-hmac-integrity-key"):
         self.hmac_key = hmac_key.encode("utf-8")
-        
-        if HAS_CRYPTOGRAPHY:
-            try:
-                # Ensure key is valid 32-byte urlsafe base64
-                # if not base64 valid, generate from hash
-                key_hash = hashlib.sha256(encryption_key.encode()).digest()
-                b64_key = base64.urlsafe_b64encode(key_hash)
-                self.cipher = Fernet(b64_key)
-            except Exception as e:
-                logger.error(f"Failed to initialize Fernet cipher: {str(e)}")
-                self.cipher = None
-        else:
-            self.cipher = None
-            # Simple XOR key derived from encryption_key string
-            self.xor_key = [ord(c) for c in encryption_key]
+        try:
+            # Ensure key is valid 32-byte urlsafe base64
+            key_hash = hashlib.sha256(encryption_key.encode()).digest()
+            b64_key = base64.urlsafe_b64encode(key_hash)
+            self.cipher = Fernet(b64_key)
+        except Exception as e:
+            logger.error(f"Failed to initialize Fernet cipher: {str(e)}")
+            raise RuntimeError(f"Failed to initialize Fernet cipher: {str(e)}")
 
     def create_memory(self, agent_id: int, content: str, ttl_days: int = 30) -> Dict[str, Any]:
         """
@@ -90,25 +77,10 @@ class SecureMemoryManager:
             return False, ""
 
     def _encrypt(self, text: str) -> str:
-        if self.cipher:
-            return self.cipher.encrypt(text.encode("utf-8")).decode("utf-8")
-        else:
-            # Fallback simple XOR encoding for environment portability
-            data = text.encode("utf-8")
-            xor_data = bytearray(len(data))
-            for i in range(len(data)):
-                xor_data[i] = data[i] ^ self.xor_key[i % len(self.xor_key)]
-            return base64.b64encode(xor_data).decode("utf-8")
+        return self.cipher.encrypt(text.encode("utf-8")).decode("utf-8")
 
     def _decrypt(self, encrypted_b64: str) -> str:
-        if self.cipher:
-            return self.cipher.decrypt(encrypted_b64.encode("utf-8")).decode("utf-8")
-        else:
-            data = base64.b64decode(encrypted_b64.encode("utf-8"))
-            xor_data = bytearray(len(data))
-            for i in range(len(data)):
-                xor_data[i] = data[i] ^ self.xor_key[i % len(self.xor_key)]
-            return xor_data.decode("utf-8")
+        return self.cipher.decrypt(encrypted_b64.encode("utf-8")).decode("utf-8")
 
     def _generate_signature(self, memory_hash: str, encrypted_content: str, trust_score: float) -> str:
         payload = f"{memory_hash}:{encrypted_content}:{trust_score:.4f}".encode("utf-8")

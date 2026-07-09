@@ -2,7 +2,7 @@ import logging
 from typing import List
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
-from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.models.openai import OpenAIModel
 from backend.app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ class AdversarialTestBatch(BaseModel):
 
 from pydantic_ai.providers.openai import OpenAIProvider
 
-def _get_pydantic_ai_model() -> OpenAIChatModel:
+def _get_pydantic_ai_model() -> OpenAIModel:
     """Configure and return the model compatibility layer for Pydantic AI."""
     if settings.JUDGE_PROVIDER == "ollama":
         base_url = f"{settings.OLLAMA_URL}/v1"
@@ -57,7 +57,7 @@ def _get_pydantic_ai_model() -> OpenAIChatModel:
         base_url=base_url,
         api_key=api_key
     )
-    return OpenAIChatModel(
+    return OpenAIModel(
         model_name=settings.JUDGE_MODEL,
         provider=provider_instance
     )
