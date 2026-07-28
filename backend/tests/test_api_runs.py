@@ -115,3 +115,62 @@ async def test_compare_evaluation_runs_endpoint(mock_db):
     assert "is_significant" in data
 
     app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_trigger_evaluation_run_with_overrides(mock_db):
+    """Verify that triggering an evaluation run with model, provider, and system prompt overrides functions correctly."""
+    mock_project = Project(id=1, name="Arbiter Project")
+    mock_suite = TestSuite(
+        id=2, 
+        project_id=1, 
+        name="Guardrail Suite", 
+        system_prompt="system", 
+        target_model_config={}, 
+        intent_definition={}
+    )
+
+    async def mock_get(model, obj_id):
+        if model == Project and obj_id == 1:
+            return mock_project
+        if model == TestSuite and obj_id == 2:
+            return mock_suite
+        return None
+
+    mock_db.get.side_effect = mock_get
+    
+    async def mock_refresh(instance):
+        instance.id = 6
+        return instance
+    mock_db.refresh.side_effect = mock_refresh
+
+    app.dependency_overrides[get_db_session] = lambda: mock_db
+
+    with patch("backend.app.tasks.evaluation.run_evaluation_batch_task.delay") as mock_celery:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/runs/",
+                json={
+                    "project_id": 1,
+                    "suite_id": 2,
+                    "target_url": "http://mock-target/v1",
+                    "commit_sha": "abc123sha",
+                    "branch": "feature-branch",
+                    "provider": "ollama",
+                    "model": "llama3",
+                    "system_prompt": "Custom overridden system prompt"
+                }
+            )
+        
+        assert response.status_code == 202
+        data = response.json()
+        assert data["id"] == 6
+        assert data["status"] == "PENDING"
+        assert mock_db.add.called
+        added_run = mock_db.add.call_args[0][0]
+        assert added_run.provider == "ollama"
+        assert added_run.model == "llama3"
+        assert added_run.system_prompt == "Custom overridden system prompt"
+        mock_celery.assert_called_once_with(6)
+
+    app.dependency_overrides.clear()

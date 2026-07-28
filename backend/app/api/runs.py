@@ -19,6 +19,9 @@ class TriggerRunRequest(BaseModel):
     target_url: str = Field(..., description="URL of the model/endpoint under test")
     commit_sha: str = Field(..., description="Git commit hash")
     branch: str = Field(..., description="Git branch name")
+    provider: Optional[str] = Field(None, description="Optional target provider override")
+    model: Optional[str] = Field(None, description="Optional target model override")
+    system_prompt: Optional[str] = Field(None, description="Optional system prompt override")
 
 # --- API Endpoints ---
 
@@ -46,7 +49,10 @@ async def trigger_evaluation_run(
         status="PENDING",
         commit_sha=run_in.commit_sha,
         branch=run_in.branch,
-        target_url=run_in.target_url
+        target_url=run_in.target_url,
+        provider=run_in.provider,
+        model=run_in.model,
+        system_prompt=run_in.system_prompt
     )
     db.add(db_run)
     await db.commit()
@@ -92,6 +98,9 @@ async def get_evaluation_run(
         "commit_sha": run.commit_sha,
         "branch": run.branch,
         "target_url": run.target_url,
+        "provider": run.provider,
+        "model": run.model,
+        "system_prompt": run.system_prompt,
         "created_at": run.created_at,
         "completed_at": run.completed_at,
         "results": results

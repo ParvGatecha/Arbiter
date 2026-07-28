@@ -1,4 +1,5 @@
 from typing import AsyncGenerator
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -26,6 +27,11 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         # Create all tables defined in db_models
         await conn.run_sync(SQLModel.metadata.create_all)
+        
+        # Add columns if they do not exist (migration check)
+        await conn.execute(text("ALTER TABLE evaluationrun ADD COLUMN IF NOT EXISTS provider VARCHAR;"))
+        await conn.execute(text("ALTER TABLE evaluationrun ADD COLUMN IF NOT EXISTS model VARCHAR;"))
+        await conn.execute(text("ALTER TABLE evaluationrun ADD COLUMN IF NOT EXISTS system_prompt VARCHAR;"))
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     """Dependency to get async database session."""

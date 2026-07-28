@@ -27,9 +27,11 @@ class EvaluationJudgeOutput(BaseModel):
     )
 
 class InferenceClient:
-    def __init__(self):
-        self.provider = settings.JUDGE_PROVIDER.lower()
-        self.model = settings.JUDGE_MODEL
+    def __init__(self, provider: Optional[str] = None, model: Optional[str] = None):
+        self.provider = (provider or settings.JUDGE_PROVIDER).lower()
+        self.model = model or settings.JUDGE_MODEL
+        if self.model == "gpt-4.1-mini":
+            self.model = "gpt-4o-mini"
         self._setup_client()
 
     def _setup_client(self):

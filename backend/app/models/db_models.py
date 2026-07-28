@@ -164,6 +164,9 @@ class EvaluationRun(SQLModel, table=True):
     commit_sha: Optional[str] = Field(default=None, index=True)
     branch: Optional[str] = Field(default=None, index=True)
     target_url: Optional[str] = Field(default=None)
+    provider: Optional[str] = Field(default=None)
+    model: Optional[str] = Field(default=None)
+    system_prompt: Optional[str] = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     completed_at: Optional[datetime] = Field(default=None)
 

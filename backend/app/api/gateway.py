@@ -26,6 +26,7 @@ class GatewayCompletionRequest(BaseModel):
     project_id: int
     agent_id: Optional[int] = None
     model: str
+    provider: Optional[str] = None
     messages: List[ChatMessage]
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
 
@@ -36,9 +37,13 @@ async def call_external_llm_provider(provider: str, model: str, messages: List[D
     If credentials are missing or call fails, falls back to a simulated mock response
     to keep test pipelines passing.
     """
+    actual_model = model
+    if actual_model == "gpt-4.1-mini":
+        actual_model = "gpt-4o-mini"
+
     # 1. Translate messages
     payload = {
-        "model": model,
+        "model": actual_model,
         "messages": messages,
         "temperature": temperature
     }
@@ -287,10 +292,12 @@ async def gateway_chat_completions(
                 break
 
     # 6. Call LLM Provider downstream
-    # Map model name to a default provider
-    provider = "openai" if request.model.startswith("gpt-") else "ollama"
+    # Map model name to a default provider, or use explicit provider if passed
+    provider = request.provider
+    if not provider:
+        provider = "openai" if request.model.startswith("gpt-") else "ollama"
     content, usage = await call_external_llm_provider(
-        provider,
+        provider.lower(),
         request.model,
         raw_messages,
         request.temperature

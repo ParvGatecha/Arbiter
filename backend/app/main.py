@@ -59,8 +59,8 @@ app.include_router(api_router, prefix="/api")
 app.include_router(runs_router, prefix="/api/runs")
 app.include_router(gateway_router, prefix="/api")
 
-# Instrument FastAPI with OpenTelemetry
-FastAPIInstrumentor.instrument_app(app)
+# Instrument FastAPI with OpenTelemetry (disabled temporarily to avoid FastAPI 0.137+ _IncludedRouter compatibility bug)
+# FastAPIInstrumentor.instrument_app(app)
 
 @app.get("/health")
 def health_check():

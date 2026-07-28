@@ -50,25 +50,33 @@ async def run_evaluation_pipeline_async(run_id: int) -> None:
                 return
 
             # Resolve target URL and headers from target configuration
-            target_config = suite.target_model_config
-            provider = target_config.get("provider", "ollama").lower()
+            suite_config = suite.target_model_config
+            target_provider = run.provider or suite_config.get("provider", "ollama")
+            target_provider = target_provider.lower()
             
-            if provider == "ollama":
+            if target_provider == "ollama":
                 target_url = f"{settings.OLLAMA_URL}/v1/chat/completions"
                 target_headers = {"Authorization": "Bearer ollama"}
-            elif provider == "sglang":
+            elif target_provider == "sglang":
                 target_url = f"{settings.SGLANG_URL}/v1/chat/completions"
                 target_headers = {"Authorization": "Bearer sglang"}
             else:
-                target_url = target_config.get("url") or f"{settings.OLLAMA_URL}/v1/chat/completions"
-                target_headers = target_config.get("headers") or {}
+                target_url = suite_config.get("url") or f"{settings.OLLAMA_URL}/v1/chat/completions"
+                target_headers = suite_config.get("headers") or {}
 
-            # Instantiates InferenceClient for the Judge
-            judge_client = InferenceClient()
+            # Instantiates the Judge client based on Test Suite's baseline configuration
+            judge_provider = suite_config.get("provider", "openai")
+            judge_model = suite_config.get("model", "gpt-4o-mini")
+            judge_client = InferenceClient(provider=judge_provider, model=judge_model)
+
             runner = EvaluationRunnerService(
                 target_url=target_url,
                 target_headers=target_headers,
-                judge_model_client=judge_client
+                judge_model_client=judge_client,
+                model_name=run.model or suite_config.get("model", "target-model"),
+                system_prompt=run.system_prompt or suite.system_prompt,
+                project_id=suite.project_id,
+                provider_name=run.provider
             )
 
             # 2. Concurrency limiting using asyncio.Semaphore

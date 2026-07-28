@@ -10,7 +10,8 @@ import {
   ChevronsUpDown, 
   Filter, 
   FileJson,
-  TrendingDown
+  TrendingDown,
+  ChevronDown
 } from "lucide-react";
 
 const API_URL = "http://localhost:8000";
@@ -38,6 +39,9 @@ interface EvaluationRun {
   commit_sha?: string;
   branch?: string;
   target_url?: string;
+  provider?: string;
+  model?: string;
+  system_prompt?: string;
   created_at: string;
   completed_at?: string;
   results: EvaluationResult[];
@@ -60,6 +64,8 @@ export default function RunDetail() {
   
   // Selected baseline for comparison redirect
   const [baselineId, setBaselineId] = useState<number | "">("");
+  const [isBaselineDropdownOpen, setIsBaselineDropdownOpen] = useState(false);
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
 
   // Collapsed row tracking
   const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
@@ -119,8 +125,8 @@ export default function RunDetail() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-96 space-y-4">
-        <div className="h-10 w-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      <div className="flex flex-col items-center justify-center h-96 space-y-4 animate-fade-in">
+        <div className="h-10 w-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
         <p className="text-gray-400 text-sm">Loading run execution telemetry...</p>
       </div>
     );
@@ -165,34 +171,45 @@ export default function RunDetail() {
     }
   };
 
+  const totalCases = run.results.length;
+  const avgScore = totalCases > 0 ? run.results.reduce((acc, curr) => acc + curr.score, 0) / totalCases : 0;
+  const avgLatency = totalCases > 0 ? run.results.reduce((acc, curr) => acc + curr.latency_ms, 0) / totalCases : 0;
+  const totalTokens = run.results.reduce((acc, curr) => acc + (curr.token_count || 0), 0);
+  const totalCost = run.results.reduce((acc, curr) => acc + (curr.cost || 0), 0);
+
   return (
     <div className="space-y-6">
       {/* Header Info Panel */}
-      <div className="bg-darkCard border border-darkBorder rounded-2xl p-6 shadow-2xl flex flex-wrap justify-between items-center gap-6">
-        <div className="space-y-2">
+      <div className="glass-card rounded-2xl p-6 shadow-2xl flex flex-wrap justify-between items-center gap-6 animate-fade-in">
+        <div className="space-y-2.5">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-black text-gray-100">Run #{run.id} Details</h1>
-            <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold uppercase ${
-              run.status === "COMPLETED" ? "bg-green-950/50 text-green-400 border border-green-900" : "bg-red-950/50 text-red-400 border border-red-900"
+            <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+              run.status === "COMPLETED" ? "bg-green-500/10 text-green-400 border border-green-500/20 shadow-sm shadow-green-500/10" : "bg-red-500/10 text-red-400 border border-red-500/20 shadow-sm shadow-red-500/10"
             }`}>
               {run.status}
             </span>
           </div>
           
           <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400 font-mono">
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1.5">
               <GitBranch className="h-4 w-4 text-gray-600" />
               {run.branch || "main"}
             </span>
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1.5">
               <GitCommit className="h-4 w-4 text-gray-600" />
               {run.commit_sha ? run.commit_sha.substring(0, 7) : "manual-run"}
             </span>
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1.5">
               <Globe className="h-4 w-4 text-gray-600" />
               {run.target_url || "Ollama-Local"}
             </span>
-            <span className="flex items-center gap-1">
+            {run.model && (
+              <span className="flex items-center gap-1.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                Model: {run.model} ({run.provider || "openai"})
+              </span>
+            )}
+            <span className="flex items-center gap-1.5">
               <Clock className="h-4 w-4 text-gray-600" />
               Duration: {durationStr}
             </span>
@@ -201,26 +218,71 @@ export default function RunDetail() {
 
         {/* Statistical comparison side panel */}
         {allRuns.length > 0 && (
-          <form onSubmit={handleCompareSubmit} className="flex items-center gap-3 bg-darkBg border border-darkBorder p-2 rounded-xl">
+          <form onSubmit={handleCompareSubmit} className="flex items-center gap-3 bg-white/[0.02] border border-white/[0.06] p-2.5 rounded-xl shadow-inner">
             <div className="flex flex-col">
               <label className="text-[10px] text-gray-500 font-bold uppercase px-1">Statistical Regression Check</label>
-              <select
-                value={baselineId}
-                onChange={e => setBaselineId(e.target.value ? Number(e.target.value) : "")}
-                className="bg-transparent text-xs text-gray-200 border-none outline-none cursor-pointer pr-4 font-semibold mt-1"
-              >
-                <option value="" className="bg-darkCard">Select Baseline Run</option>
-                {allRuns.map(r => (
-                  <option key={r.id} value={r.id} className="bg-darkCard">
-                    Run #{r.id} ({r.commit_sha?.substring(0, 7) || "manual"})
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsBaselineDropdownOpen(!isBaselineDropdownOpen)}
+                  className="bg-transparent text-xs text-gray-200 border-none outline-none cursor-pointer pr-4 font-semibold mt-1.5 focus:ring-0 flex items-center gap-1.5 select-none"
+                >
+                  <span>
+                    {baselineId === ""
+                      ? "Select Baseline Run"
+                      : `Run #${baselineId} (${allRuns.find(r => r.id === baselineId)?.commit_sha?.substring(0, 7) || "manual"})`}
+                  </span>
+                  <ChevronDown className={`h-3 w-3 text-gray-500 transition-transform duration-200 ${isBaselineDropdownOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {isBaselineDropdownOpen && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setIsBaselineDropdownOpen(false)}
+                    />
+                    <div className="absolute left-0 mt-2 w-56 bg-[#090a0f]/95 border border-white/[0.06] rounded-2xl shadow-2xl backdrop-blur-xl p-2 z-50 animate-fade-in space-y-1">
+                      <div
+                        onClick={() => {
+                          setBaselineId("");
+                          setIsBaselineDropdownOpen(false);
+                        }}
+                        className={`px-3 py-2 rounded-xl cursor-pointer transition-all text-xs font-semibold flex items-center justify-between border ${
+                          baselineId === ""
+                            ? "bg-indigo-600/10 text-indigo-400 border-indigo-500/20" 
+                            : "text-gray-400 border-transparent hover:text-gray-200 hover:bg-white/[0.02]"
+                        }`}
+                      >
+                        <span>Select Baseline Run</span>
+                      </div>
+                      {allRuns.map(r => (
+                        <div
+                          key={r.id}
+                          onClick={() => {
+                            setBaselineId(r.id);
+                            setIsBaselineDropdownOpen(false);
+                          }}
+                          className={`px-3 py-2 rounded-xl cursor-pointer transition-all text-xs font-semibold flex items-center justify-between border ${
+                            baselineId === r.id
+                              ? "bg-indigo-600/10 text-indigo-400 border-indigo-500/20" 
+                              : "text-gray-400 border-transparent hover:text-gray-200 hover:bg-white/[0.02]"
+                          }`}
+                        >
+                          <span className="truncate pr-2">Run #{r.id} ({r.commit_sha?.substring(0, 7) || "manual"})</span>
+                          {baselineId === r.id && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
             <button
               type="submit"
               disabled={!baselineId}
-              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 rounded-lg text-xs font-bold text-white transition-all shadow-md flex items-center gap-1.5"
+              className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:bg-white/[0.04] disabled:text-gray-600 rounded-xl text-xs font-bold text-white transition-all duration-200 active:scale-95 shadow shadow-indigo-500/10 flex items-center gap-2"
             >
               <TrendingDown className="h-3.5 w-3.5" />
               Verify Regression
@@ -229,23 +291,111 @@ export default function RunDetail() {
         )}
       </div>
 
+      {run.system_prompt && (
+        <div className="glass-card rounded-2xl p-5 border border-white/[0.04] bg-[#0c0d12]/20 text-xs space-y-2 animate-fade-in shadow-xl">
+          <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest font-mono">System Prompt for Run #{run.id}</span>
+          <pre className="font-mono text-gray-300 whitespace-pre-wrap select-text leading-relaxed bg-[#06070a]/40 p-4 rounded-xl border border-white/[0.03]">
+            {run.system_prompt}
+          </pre>
+        </div>
+      )}
+
+      {/* Visual Metrics Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in">
+        <div className="glass-card rounded-2xl p-5 hover:shadow-indigo-500/5 hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between">
+          <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Average Score</span>
+          <div className="flex items-baseline gap-2 mt-2">
+            <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">
+              {avgScore.toFixed(2)}
+            </span>
+            <span className="text-xs text-gray-500 font-medium">/ 1.0</span>
+          </div>
+        </div>
+
+        <div className="glass-card rounded-2xl p-5 hover:shadow-indigo-500/5 hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between">
+          <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Avg Latency</span>
+          <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400 mt-2">
+            {avgLatency.toFixed(0)} <span className="text-sm font-medium text-gray-500">ms</span>
+          </span>
+        </div>
+
+        <div className="glass-card rounded-2xl p-5 hover:shadow-indigo-500/5 hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between">
+          <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Total Tokens</span>
+          <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-violet-400 mt-2">
+            {totalTokens.toLocaleString()}
+          </span>
+        </div>
+
+        <div className="glass-card rounded-2xl p-5 hover:shadow-indigo-500/5 hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between">
+          <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Total Cost</span>
+          <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-pink-400 mt-2">
+            ${totalCost.toFixed(5)}
+          </span>
+        </div>
+      </div>
+
       {/* Filter and controls bar */}
-      <div className="bg-darkCard border border-darkBorder rounded-xl p-4 flex flex-wrap justify-between items-center gap-4">
+      <div className="glass-card rounded-2xl p-4.5 flex flex-wrap justify-between items-center gap-4 animate-fade-in">
         <div className="flex flex-wrap items-center gap-5">
           {/* Category Dropdown */}
-          <div className="flex items-center gap-2 bg-darkBg border border-darkBorder px-3 py-1.5 rounded-lg text-xs">
-            <Filter className="h-3.5 w-3.5 text-gray-500" />
-            <span className="text-gray-400">Category:</span>
-            <select
-              value={categoryFilter}
-              onChange={e => setCategoryFilter(e.target.value)}
-              className="bg-transparent border-none outline-none font-semibold text-gray-200 cursor-pointer"
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+              className="flex items-center gap-2.5 bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] hover:bg-white/[0.03] px-4.5 py-2 rounded-xl text-xs font-bold text-gray-200 shadow-inner cursor-pointer select-none active:scale-[0.98]"
             >
-              <option value="all" className="bg-darkCard">All Intents</option>
-              {categories.map(cat => (
-                <option key={cat} value={cat} className="bg-darkCard">{cat}</option>
-              ))}
-            </select>
+              <Filter className="h-3.5 w-3.5 text-gray-500" />
+              <span className="text-indigo-400 font-extrabold uppercase tracking-wider text-[9px]">Category:</span>
+              <span className="font-extrabold tracking-tight">{categoryFilter === "all" ? "All Intents" : categoryFilter}</span>
+              <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${isCategoryDropdownOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            {isCategoryDropdownOpen && (
+              <>
+                <div 
+                  className="fixed inset-0 z-40" 
+                  onClick={() => setIsCategoryDropdownOpen(false)}
+                />
+                
+                <div className="absolute left-0 mt-2 w-56 bg-[#090a0f]/95 border border-white/[0.06] rounded-2xl shadow-2xl backdrop-blur-xl p-2.5 z-50 animate-fade-in space-y-1">
+                  <div
+                    onClick={() => {
+                      setCategoryFilter("all");
+                      setIsCategoryDropdownOpen(false);
+                    }}
+                    className={`px-3 py-2 rounded-xl cursor-pointer transition-all text-xs font-semibold flex items-center justify-between border ${
+                      categoryFilter === "all" 
+                        ? "bg-indigo-600/10 text-indigo-400 border-indigo-500/20 shadow-sm shadow-indigo-500/5" 
+                        : "text-gray-400 border-transparent hover:text-gray-200 hover:bg-white/[0.02]"
+                    }`}
+                  >
+                    <span>All Intents</span>
+                    {categoryFilter === "all" && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
+                    )}
+                  </div>
+                  {categories.map(cat => (
+                    <div
+                      key={cat}
+                      onClick={() => {
+                        setCategoryFilter(cat);
+                        setIsCategoryDropdownOpen(false);
+                      }}
+                      className={`px-3 py-2 rounded-xl cursor-pointer transition-all text-xs font-semibold flex items-center justify-between border ${
+                        categoryFilter === cat 
+                          ? "bg-indigo-600/10 text-indigo-400 border-indigo-500/20 shadow-sm shadow-indigo-500/5" 
+                          : "text-gray-400 border-transparent hover:text-gray-200 hover:bg-white/[0.02]"
+                      }`}
+                    >
+                      <span className="truncate pr-2">{cat}</span>
+                      {categoryFilter === cat && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Adversarial Checkbox */}
@@ -254,7 +404,7 @@ export default function RunDetail() {
               type="checkbox"
               checked={onlyAdversarial}
               onChange={e => setOnlyAdversarial(e.target.checked)}
-              className="rounded bg-darkBg border-darkBorder text-blue-600 focus:ring-0 focus:ring-offset-0"
+              className="rounded bg-white/[0.02] border-white/[0.08] text-blue-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
             />
             Only Adversarial Variations
           </label>
@@ -265,7 +415,7 @@ export default function RunDetail() {
               type="checkbox"
               checked={onlyViolations}
               onChange={e => setOnlyViolations(e.target.checked)}
-              className="rounded bg-darkBg border-darkBorder text-red-600 focus:ring-0 focus:ring-offset-0"
+              className="rounded bg-white/[0.02] border-white/[0.08] text-red-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
             />
             Only Low Scores/Violations
           </label>
@@ -277,11 +427,11 @@ export default function RunDetail() {
       </div>
 
       {/* Table Results */}
-      <div className="bg-darkCard border border-darkBorder rounded-2xl overflow-hidden shadow-2xl">
+      <div className="glass-card rounded-2xl overflow-hidden shadow-2xl animate-fade-in">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-darkBorder bg-darkBg/50 text-gray-400 text-[10px] uppercase font-bold tracking-wider">
+              <tr className="border-b border-white/[0.05] bg-white/[0.01] text-gray-400 text-[10px] uppercase font-bold tracking-widest">
                 <th className="py-4 px-6 w-16">ID</th>
                 <th className="py-4 px-6">Prompt / Output</th>
                 <th className="py-4 px-6 w-32">Intent Category</th>
@@ -290,7 +440,7 @@ export default function RunDetail() {
                 <th className="py-4 px-6 w-16"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-darkBorder/60">
+            <tbody className="divide-y divide-white/[0.04]">
               {filteredResults.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-10 text-gray-500 text-sm">
@@ -304,7 +454,7 @@ export default function RunDetail() {
 
                   return (
                     <React.Fragment key={res.id}>
-                      <tr className="hover:bg-darkBg/20 transition-colors text-sm">
+                      <tr className="hover:bg-white/[0.02] transition-colors duration-200 text-sm">
                         <td className="py-4 px-6 font-mono text-gray-500">#{index + 1}</td>
                         <td className="py-4 px-6 max-w-md">
                           <div className="space-y-1">
@@ -313,7 +463,7 @@ export default function RunDetail() {
                           </div>
                         </td>
                         <td className="py-4 px-6">
-                          <span className="text-[10px] bg-darkBg border border-darkBorder px-2.5 py-1 rounded text-gray-400 uppercase tracking-wide">
+                          <span className="text-[9px] bg-white/[0.02] border border-white/[0.06] px-2.5 py-1 rounded-lg text-gray-400 font-semibold uppercase tracking-widest">
                             {res.intent_category}
                           </span>
                         </td>
@@ -324,12 +474,12 @@ export default function RunDetail() {
                         </td>
                         <td className="py-4 px-6 text-center">
                           {hasViolation ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-400 bg-red-950/40 border border-red-950 px-2 py-0.5 rounded uppercase">
+                            <span className="inline-flex items-center gap-1.5 text-[9px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-sm shadow-red-500/5">
                               <AlertTriangle className="h-3 w-3" />
                               Leak
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-400 bg-green-950/30 border border-green-950 px-2 py-0.5 rounded uppercase">
+                            <span className="inline-flex items-center gap-1.5 text-[9px] font-bold text-green-400 bg-green-500/10 border border-green-500/20 px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-sm shadow-green-500/5">
                               <CheckCircle2 className="h-3 w-3" />
                               Safe
                             </span>
@@ -347,20 +497,20 @@ export default function RunDetail() {
                       
                       {/* Expanded View: Rationale & JSON inspection */}
                       {isExpanded && (
-                        <tr className="bg-darkBg/40 border-t border-darkBorder/40">
+                        <tr className="bg-white/[0.01] border-t border-white/[0.03]">
                           <td colSpan={6} className="py-4 px-8 text-xs space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                               {/* Prompts/outputs */}
                               <div className="space-y-3">
                                 <div>
                                   <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Input Prompt</span>
-                                  <div className="p-3 bg-darkBg border border-darkBorder rounded-lg font-mono text-gray-300 leading-relaxed max-h-40 overflow-y-auto mt-1 break-all">
+                                  <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl font-mono text-gray-300 leading-relaxed max-h-40 overflow-y-auto mt-1 break-all shadow-inner">
                                     {res.input_prompt}
                                   </div>
                                 </div>
                                 <div>
                                   <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Model Response Output</span>
-                                  <div className="p-3 bg-darkBg border border-darkBorder rounded-lg font-mono text-gray-300 leading-relaxed max-h-40 overflow-y-auto mt-1 break-all">
+                                  <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl font-mono text-gray-300 leading-relaxed max-h-40 overflow-y-auto mt-1 break-all shadow-inner">
                                     {res.actual_output}
                                   </div>
                                 </div>
@@ -370,7 +520,7 @@ export default function RunDetail() {
                               <div className="space-y-3">
                                 <div>
                                   <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Judge Rationale & Critique</span>
-                                  <div className="p-3 bg-darkBg border border-darkBorder/80 rounded-lg text-gray-300 leading-relaxed mt-1 italic">
+                                  <div className="p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-xl text-gray-300 leading-relaxed mt-1.5 italic shadow-inner">
                                     {res.rationale}
                                   </div>
                                 </div>
