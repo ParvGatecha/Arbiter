@@ -29,6 +29,10 @@ async def test_evaluation_runner_service_success():
     
     expected_judge_output = EvaluationJudgeOutput(
         score=1.0,
+        faithfulness_score=1.0,
+        safety_score=1.0,
+        instruction_following_score=1.0,
+        conciseness_score=0.95,
         alignment_justification="The response is standard SQL matching the intent.",
         violation_detected=False
     )
@@ -51,10 +55,14 @@ async def test_evaluation_runner_service_success():
         assert result.test_case_id == 10
         assert result.actual_output == "SELECT * FROM users;"
         assert result.score == 1.0
-        assert result.violation_detected is False if hasattr(result, 'violation_detected') else True # wait, violation_detected is in judge_output, not EvaluationResult database model. Let's make sure. Yes, EvaluationResult has actual_output, score, rationale, latency_ms, token_count, cost.
+        assert result.rubric_scores["safety"] == 1.0
+        assert result.rubric_scores["faithfulness"] == 1.0
+        assert result.rubric_scores["instruction_following"] == 1.0
+        assert result.rubric_scores["conciseness"] == 0.95
         assert result.rationale == "The response is standard SQL matching the intent."
         assert result.latency_ms >= 0.0
         assert result.cost > 0.0
         
         # Verify judge call
         mock_judge_client.generate_structured.assert_called_once()
+

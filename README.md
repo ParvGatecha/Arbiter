@@ -14,7 +14,7 @@
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)](https://kubernetes.io)
 [![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-F15A24?style=for-the-badge&logo=opentelemetry&logoColor=white)](https://opentelemetry.io/)
 
-[ 📖 Features ](#-key-features) • [ ⚡ 2-Min Quickstart ](#-quickstart) • [ 🏛️ Architecture ](#️-architectural-overview) • [ 🛡️ Gateway & Policies ](#-gateway-api--policy-engine) • [ 📊 Statistical Engine ](#-statistical-regression-engine) • [ 💻 CLI & CI/CD ](#-command-line-interface-cli--cicd) • [ ☸️ Production Deploy ](#️-production-deployment-docker--k8s)
+[ 📖 Features ](#-key-features) • [ ⚡ 2-Min Quickstart ](#-quickstart) • [ 🏛️ Architecture ](#️-architectural-overview) • [ 🛡️ Gateway & Policies ](#-gateway-api--policy-engine) • [ 📊 Statistical Engine ](#-statistical-regression-engine) • [ ⚖️ LLM Judge ](#️-multi-dimensional-rubric-llm-as-a-judge) • [ 🔄 Flywheel ](#-production-to-benchmark-flywheel) • [ 💻 CLI & CI/CD ](#-command-line-interface-cli--cicd) • [ ☸️ Production Deploy ](#️-production-deployment-docker--k8s)
 
 ---
 
@@ -35,9 +35,11 @@ As LLMs transition into enterprise workflows and autonomous agentic loops, tradi
 | 🛡️ **Reverse Proxy Gateway** | Intercepts `chat/completions` calls in real time. Compatible drop-in replacement for OpenAI, Anthropic, Gemini, Ollama, and vLLM. | `backend/app/api/gateway.py` |
 | 🕵️ **Real-Time Threat Scanner** | Scans for prompt injections, jailbreaks, PII leakage (SSN, Email, CC), credentials, and obfuscated payloads mapped to MITRE ATT&CK & OWASP LLM Top 10. | `backend/app/services/security_scanner.py` |
 | 📋 **Declarative YAML Policies** | Compile dynamic policy rules to `block`, `mask`, `flag`, or restrict tool executions per project without re-deploying code. | `backend/app/services/policy_evaluator.py` |
-| 📊 **Statistical Regression Engine** | Non-parametric **Mann-Whitney U** testing and **Bootstrap 95% Confidence Intervals** prevent noisy LLM score rollouts and false positives. | `backend/app/services/statistics.py` |
+| 📊 **Statistical Regression Engine** | **Paired Wilcoxon Signed-Rank** & **Mann-Whitney U** testing with **Cliff's Delta ($\delta$) Effect Sizes** and **Bootstrap 95% CIs** prevent false positives in CI/CD. | `backend/app/services/statistics.py` |
+| ⚖️ **Multi-Dimensional LLM Judge** | Decomposed rubric scoring (*Faithfulness, Safety, Instruction Following, Conciseness*) with structured Pydantic outputs and OTel telemetry. | `backend/app/services/evaluator.py` |
+| 🔄 **Production-to-Benchmark Flywheel** | One-click promotion of live production Gateway security events and failure cases into persistent regression test cases. | `backend/app/api/endpoints.py` |
 | 🔐 **Cryptographic Memory Guard** | Fernet (AES-128) payload encryption and HMAC-SHA256 integrity signatures protect agent state against memory poisoning attacks. | `backend/app/services/memory_manager.py` |
-| 🤖 **Asynchronous Red-Teaming** | Celery & Redis pipeline executing batch evaluation suites, adversarial red-teaming generation, and alignment judging. | `backend/app/services/adversarial.py` |
+| 🤖 **Asynchronous Red-Teaming** | Celery & Redis pipeline executing automated red-teaming prompt synthesis across 5 attack vectors using Pydantic AI. | `backend/app/services/adversarial.py` |
 | 💻 **CLI & CI/CD Gating** | Developer CLI with auto Git SHA detection that exits with code `1` on detected statistical performance regressions. | `cli/arbiter_cli/main.py` |
 | 🔭 **OpenTelemetry Tracing** | Full OTel span integration for distributed tracing across gateway proxying, evaluation tasks, and judge evaluations. | `backend/app/core/config.py` |
 
@@ -80,7 +82,7 @@ ARBITER operates across three coordinated execution planes:
 ```
 
 1. **Proxy & Control Plane (`backend/app/`)**: High-throughput FastAPI reverse proxy running inline security filters and dynamic YAML policy evaluations.
-2. **Distributed Queue & Asynchronous Workers (`tasks/`, `Celery`)**: Offloads long-running test suites, red-teaming suites, and statistical calculations.
+2. **Distributed Queue & Asynchronous Workers (`tasks/`, `Celery`)**: Offloads long-running test suites, red-teaming suites, and statistical calculations with `asyncio.Semaphore` rate-limiting.
 3. **Storage & Observability (`PostgreSQL`, `Redis`, `OpenTelemetry`)**: Persistent database audit logs, security event vectors, encrypted agent memories, and telemetry spans.
 
 ---
@@ -212,20 +214,55 @@ rules:
 
 Evaluating LLM performance using simple average score differences often leads to **false positives** due to extreme score outliers and high variance across prompt evaluation suites.
 
-ARBITER solves this by employing **non-parametric statistical analysis**:
+ARBITER solves this with **non-parametric statistical analysis and effect size estimation**:
 
-1. **Mann-Whitney U Test (Wilcoxon Rank-Sum)**: Compares rank distributions rather than means to test the null hypothesis $H_0$: whether candidate run scores systematically differ from baseline run scores.
-   $$U = n_1 n_2 + \frac{n_1(n_1+1)}{2} - R_1$$
+1. **Paired Wilcoxon Signed-Rank Test**: When comparing candidate and baseline runs on identical benchmark test cases, ARBITER pairs the observations to eliminate case-difficulty variance:
+   $$W = \sum_{i=1}^{N_r} \left[ \text{sgn}(x_{2,i} - x_{1,i}) \cdot R_i \right]$$
+   *(Falls back to Mann-Whitney U rank-sum for unpaired / unequal sample sizes).*
 
-2. **Bootstrap Resampling (95% Confidence Interval)**: Performs 1,000 resamples of score delta distributions to calculate robust lower and upper bounds ($CI_{lower}, CI_{upper}$).
+2. **Cliff’s Delta ($\delta$) Effect Size**: Non-parametric effect size quantifying the practical dominance of one distribution over another:
+   $$\delta = \frac{\#(\text{candidate} > \text{baseline}) - \#(\text{candidate} < \text{baseline})}{n_1 n_2}$$
+   Categorized into `NEGLIGIBLE` ($|\delta| < 0.147$), `SMALL` ($0.147 \le |\delta| < 0.33$), `MEDIUM` ($0.33 \le |\delta| < 0.474$), and `LARGE` ($|\delta| \ge 0.474$).
+
+3. **Bootstrap Resampling (95% Confidence Interval)**: 1,000 resamples of paired score differences to establish empirical bounds ($CI_{lower}, CI_{upper}$).
+
+4. **Sample Size & Statistical Power Warning**: Flags when $n < 30$ test cases to alert developers to lower statistical power.
 
 ```
                              Score Distribution Comparison
       Baseline Run  [░░░▒▒▓▓▓▓▓▓▒▒░░]
-      Candidate Run [░░▒▒▓▓▓▓▒▒░░░░░]  --> Shift Detected (p < 0.05)
+      Candidate Run [░░▒▒▓▓▓▓▒▒░░░░░]  --> Shift Detected (p < 0.05, Cliff's d = -0.62 [LARGE])
 ```
 
-* **REGRESSION Trigger**: If the p-value $< 0.05$ and $CI_{upper} < 0.0$, ARBITER flags the candidate as a **statistically significant regression** and fails the build.
+* **REGRESSION Trigger**: If $p < 0.05$ and $CI_{upper} < 0.0$, ARBITER flags the candidate as a **statistically significant regression** and fails the CI/CD build.
+
+---
+
+## ⚖️ Multi-Dimensional Rubric LLM-as-a-Judge
+
+Rather than reducing model quality to a single vague score, ARBITER's judge engine (`backend/app/services/evaluator.py`) evaluates outputs across four decomposed rubric dimensions via structured JSON schema:
+
+* **Faithfulness Score ($0.0 - 1.0$)**: Factual adherence and grounding against the reference answer.
+* **Safety Score ($0.0 - 1.0$)**: Guardrail resistance ($1.0 =$ zero jailbreak, prompt injection, or credential leak).
+* **Instruction Following ($0.0 - 1.0$)**: Compliance with format, schema, and intent constraints.
+* **Conciseness Score ($0.0 - 1.0$)**: Density and avoidance of boilerplate disclaimers.
+
+---
+
+## 🔄 Production-to-Benchmark Flywheel
+
+Convert real-world adversarial attacks and edge cases into permanent regression test cases with a single API call:
+
+```bash
+curl -X POST http://localhost:8000/api/gateway/logs/42/promote-to-testcase \
+  -H "Content-Type: application/json" \
+  -d '{
+    "suite_id": 1,
+    "intent_category": "prompt_injection",
+    "adversarial_flag": true
+  }'
+```
+
 
 ---
 
@@ -338,10 +375,14 @@ kubectl apply -f deploy/k8s/deployment.yaml
 | **Sub-Millisecond PII Redaction** | ✅ | ✅ | ⚠️ Partial | ❌ |
 | **OWASP / MITRE Threat Scans** | ✅ | ⚠️ Basic | ❌ | ❌ |
 | **Declarative YAML Policies** | ✅ | ⚠️ Python Code | ⚠️ Basic | ❌ |
-| **Non-Parametric Regression Tests** | ✅ | 开启 (No) | ❌ | ❌ (Means only) |
+| **Paired Non-Parametric Regressions** | ✅ (Wilcoxon + Bootstrap) | ❌ | ❌ | ❌ (Means only) |
+| **Cliff's Delta Effect Sizes ($\delta$)** | ✅ | ❌ | ❌ | ❌ |
+| **Multi-Dimensional LLM Rubrics** | ✅ | ❌ | ❌ | ⚠️ Manual |
+| **Production-to-Benchmark Flywheel**| ✅ | ❌ | ❌ | ❌ |
 | **Cryptographic Agent Memory** | ✅ | ❌ | ❌ | ❌ |
 | **CI/CD Build Blocking (Exit Code 1)**| ✅ | ❌ | ❌ | ⚠️ Manual |
 | **Native OpenTelemetry Tracing** | ✅ | ⚠️ Plugin | ⚠️ Plugin | ⚠️ Basic |
+
 
 ---
 

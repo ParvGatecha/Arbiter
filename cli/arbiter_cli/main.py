@@ -152,14 +152,26 @@ def evaluate(
             stats_table = Table(title="Statistical Comparison Report", border_style="cyan")
             stats_table.add_column("Metric", style="green")
             stats_table.add_column("Value", style="white")
+            stats_table.add_row("Statistical Test Method", report.get('test_method', 'WILCOXON_SIGNED_RANK'))
             stats_table.add_row("Baseline Mean", f"{report['baseline_mean']:.4f}")
             stats_table.add_row("Candidate Mean", f"{report['candidate_mean']:.4f}")
             stats_table.add_row("Mean Difference", f"{report['mean_difference']:.4f}")
-            stats_table.add_row("Mann-Whitney U P-Value", f"{report['p_value']:.6f}")
+            stats_table.add_row("Hypothesis P-Value", f"{report['p_value']:.6f}")
             stats_table.add_row("95% Bootstrap CI", f"[{report['ci_lower']:.4f}, {report['ci_upper']:.4f}]")
+            
+            cliffs_d = report.get('cliffs_delta', 0.0)
+            effect_mag = report.get('effect_size_magnitude', 'NEGLIGIBLE')
+            stats_table.add_row("Cliff's Delta (Effect Size)", f"{cliffs_d:+.4f} ({effect_mag})")
+            
+            sample_size = report.get('sample_size', len(completed_run_data['results']))
+            sample_warning = report.get('sample_size_warning', False)
+            sample_val = f"{sample_size}" + (" [yellow](Low sample size <30: lower statistical power)[/yellow]" if sample_warning else " (Adequate)")
+            stats_table.add_row("Sample Size", sample_val)
+            
             stats_table.add_row("Significance Check", "SIGNIFICANT" if report['is_significant'] else "NOT SIGNIFICANT")
             stats_table.add_row("Outcome Decision", report['outcome'])
             console.print(stats_table)
+
 
             # Check if there are failing cases (score < 0.5)
             failing_results = [r for r in completed_run_data["results"] if r["score"] < 0.5]

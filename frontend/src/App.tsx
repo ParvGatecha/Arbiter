@@ -17,6 +17,7 @@ import {
   Terminal,
   ArrowLeft,
   BookOpen,
+  CheckCircle2,
   TrendingUp
 } from "lucide-react";
 
@@ -660,7 +661,7 @@ export default function App() {
       <div className="min-h-screen bg-darkBg text-gray-100 flex flex-col font-sans">
         
         {/* Consistent Top Header */}
-        <header className="border-b border-white/[0.05] bg-[#090a0f]/80 backdrop-blur-md sticky top-0 z-30 px-6 py-4 flex justify-between items-center shadow-lg shadow-black/20">
+        <header className="border-b border-white/[0.05] bg-[#090a0f]/80 backdrop-blur-md sticky top-0 z-50 px-6 py-4 flex justify-between items-center shadow-lg shadow-black/20">
           <Link to="/" className="flex items-center gap-3 hover:opacity-95 transition-all no-underline">
             <div className="p-2.5 bg-gradient-to-br from-indigo-500 via-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-indigo-500/25 animate-pulse-glow">
               <Activity className="h-5 w-5 text-white" />
@@ -679,43 +680,46 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setIsProjectDropdownOpen(!isProjectDropdownOpen)}
-                  className="flex items-center gap-2.5 bg-white/[0.02] border border-white/[0.07] hover:border-white/[0.15] hover:bg-white/[0.04] px-4.5 py-2.5 rounded-xl text-xs font-bold text-gray-250 shadow-lg transition-all duration-200 cursor-pointer select-none active:scale-[0.98]"
+                  className="flex items-center gap-2.5 bg-[#090a0f]/90 border border-indigo-500/30 hover:border-indigo-500/50 hover:bg-[#0d0e17] px-4 py-2.5 rounded-xl text-xs font-bold text-gray-200 shadow-lg shadow-indigo-950/20 active:scale-[0.98] transition-all cursor-pointer select-none"
                 >
-                  <span className="text-indigo-400 font-extrabold uppercase tracking-wider text-[9px]">Project:</span>
-                  <span className="font-extrabold tracking-tight text-gray-200">{selectedProject?.name || "Select Project"}</span>
-                  <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${isProjectDropdownOpen ? "rotate-180" : ""}`} />
+                  <span className="text-gray-400 uppercase tracking-wider text-[9px] font-bold">Project:</span>
+                  <span className="font-bold text-indigo-300">{selectedProject?.name || "Select Project"}</span>
+                  <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform duration-200 ${isProjectDropdownOpen ? "rotate-180 text-indigo-400" : ""}`} />
                 </button>
 
                 {isProjectDropdownOpen && (
                   <>
                     <div 
-                      className="fixed inset-0 z-40" 
+                      className="fixed inset-0 z-[99]" 
                       onClick={() => setIsProjectDropdownOpen(false)}
                     />
                     
-                    <div className="absolute right-0 mt-2 w-56 bg-[#090a0f]/95 border border-white/[0.06] rounded-2xl shadow-2xl backdrop-blur-xl p-2.5 z-50 animate-fade-in space-y-1">
-                      <div className="text-[9px] text-gray-500 font-bold uppercase tracking-widest px-2.5 py-1.5 border-b border-white/[0.03] mb-1">
-                        Select Workspace
+                    <div className="absolute right-0 mt-2 w-64 bg-[#090a0f]/95 border border-indigo-500/20 rounded-2xl shadow-2xl backdrop-blur-2xl p-2 z-[100] animate-fade-in space-y-1">
+                      <div className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest border-b border-white/[0.04] mb-1">
+                        Select Active Workspace
                       </div>
-                      {projects.map(p => (
-                        <div
-                          key={p.id}
-                          onClick={() => {
-                            setSelectedProject(p);
-                            setIsProjectDropdownOpen(false);
-                          }}
-                          className={`px-3 py-2 rounded-xl cursor-pointer transition-all text-xs font-semibold flex items-center justify-between border ${
-                            selectedProject?.id === p.id 
-                              ? "bg-indigo-600/10 text-indigo-400 border-indigo-500/20 shadow-sm shadow-indigo-500/5" 
-                              : "text-gray-400 border-transparent hover:text-gray-200 hover:bg-white/[0.02]"
-                          }`}
-                        >
-                          <span className="truncate pr-2">{p.name}</span>
-                          {selectedProject?.id === p.id && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
-                          )}
-                        </div>
-                      ))}
+                      {projects.map(p => {
+                        const isSelected = selectedProject?.id === p.id;
+                        return (
+                          <div
+                            key={p.id}
+                            onClick={() => {
+                              setSelectedProject(p);
+                              setIsProjectDropdownOpen(false);
+                            }}
+                            className={`px-3 py-2 rounded-xl cursor-pointer transition-all duration-150 text-xs font-semibold flex items-center justify-between border ${
+                              isSelected 
+                                ? "bg-indigo-600/15 text-indigo-300 border-indigo-500/30 font-bold" 
+                                : "text-gray-300 border-transparent hover:text-white hover:bg-white/[0.04]"
+                            }`}
+                          >
+                            <span className="truncate pr-2 font-medium">{p.name}</span>
+                            {isSelected && (
+                              <CheckCircle2 className="h-4 w-4 text-indigo-400 shrink-0" />
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </>
                 )}

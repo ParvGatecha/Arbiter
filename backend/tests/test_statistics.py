@@ -52,3 +52,31 @@ def test_statistics_empty_inputs():
     assert not result.is_significant
     assert result.outcome == "NO_CHANGE"
     assert result.mean_difference == 0.0
+    assert result.sample_size_warning is True
+
+def test_statistics_paired_wilcoxon():
+    """Verify paired Wilcoxon test and Cliff's Delta effect size computation."""
+    base_scores = [0.90, 0.95, 0.85, 0.88, 0.92, 0.91, 0.89, 0.94, 0.87, 0.93]
+    cand_scores = [0.40, 0.45, 0.35, 0.38, 0.42, 0.41, 0.39, 0.44, 0.37, 0.43]
+    
+    result = compute_regression_analysis(base_scores, cand_scores, alpha=0.05)
+    assert result.test_method == "WILCOXON_SIGNED_RANK"
+    assert result.outcome == "REGRESSION"
+    assert result.is_significant is True
+    assert result.cliffs_delta == pytest.approx(-1.0)
+    assert result.effect_size_magnitude == "LARGE"
+    assert result.cohens_d < -1.0
+    assert result.sample_size == 10
+    assert result.sample_size_warning is True  # n < 30
+
+def test_statistics_unpaired_mismatched_lengths():
+    """Verify fallback to Mann-Whitney U for mismatched length samples."""
+    base_scores = [0.90, 0.95, 0.85, 0.88, 0.92]
+    cand_scores = [0.40, 0.45, 0.35, 0.38, 0.42, 0.41, 0.39]
+    
+    result = compute_regression_analysis(base_scores, cand_scores, alpha=0.05)
+    assert result.test_method == "MANN_WHITNEY_U"
+    assert result.outcome == "REGRESSION"
+    assert result.is_significant is True
+    assert result.sample_size == 7
+

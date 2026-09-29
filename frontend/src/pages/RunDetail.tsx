@@ -22,6 +22,7 @@ interface EvaluationResult {
   test_case_id: number;
   actual_output: string;
   score: number;
+  rubric_scores?: Record<string, number>;
   rationale: string;
   latency_ms: number;
   token_count: number;
@@ -108,7 +109,11 @@ export default function RunDetail() {
       const runsRes = await fetch(`${API_URL}/api/runs/`);
       if (runsRes.ok) {
         const runsData = await runsRes.json();
-        setAllRuns(runsData.filter((r: any) => r.suite_id === runData.suite_id && r.status === "COMPLETED" && r.id !== runData.id));
+        const baselines = runsData.filter((r: any) => Number(r.suite_id) === Number(runData.suite_id) && r.status === "COMPLETED" && Number(r.id) !== Number(runData.id));
+        setAllRuns(baselines);
+        if (baselines.length > 0) {
+          setBaselineId(baselines[0].id);
+        }
       }
     } catch (err: any) {
       setError(err.message || "Failed to load run details.");
@@ -180,7 +185,7 @@ export default function RunDetail() {
   return (
     <div className="space-y-6">
       {/* Header Info Panel */}
-      <div className="glass-card rounded-2xl p-6 shadow-2xl flex flex-wrap justify-between items-center gap-6 animate-fade-in">
+      <div className="glass-card rounded-2xl p-6 shadow-2xl flex flex-wrap justify-between items-center gap-6 animate-fade-in relative z-30">
         <div className="space-y-2.5">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-black text-gray-100">Run #{run.id} Details</h1>
@@ -217,82 +222,88 @@ export default function RunDetail() {
         </div>
 
         {/* Statistical comparison side panel */}
-        {allRuns.length > 0 && (
-          <form onSubmit={handleCompareSubmit} className="flex items-center gap-3 bg-white/[0.02] border border-white/[0.06] p-2.5 rounded-xl shadow-inner">
-            <div className="flex flex-col">
-              <label className="text-[10px] text-gray-500 font-bold uppercase px-1">Statistical Regression Check</label>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setIsBaselineDropdownOpen(!isBaselineDropdownOpen)}
-                  className="bg-transparent text-xs text-gray-200 border-none outline-none cursor-pointer pr-4 font-semibold mt-1.5 focus:ring-0 flex items-center gap-1.5 select-none"
-                >
-                  <span>
-                    {baselineId === ""
-                      ? "Select Baseline Run"
-                      : `Run #${baselineId} (${allRuns.find(r => r.id === baselineId)?.commit_sha?.substring(0, 7) || "manual"})`}
-                  </span>
-                  <ChevronDown className={`h-3 w-3 text-gray-500 transition-transform duration-200 ${isBaselineDropdownOpen ? "rotate-180" : ""}`} />
-                </button>
-
-                {isBaselineDropdownOpen && (
-                  <>
-                    <div 
-                      className="fixed inset-0 z-40" 
-                      onClick={() => setIsBaselineDropdownOpen(false)}
-                    />
-                    <div className="absolute left-0 mt-2 w-56 bg-[#090a0f]/95 border border-white/[0.06] rounded-2xl shadow-2xl backdrop-blur-xl p-2 z-50 animate-fade-in space-y-1">
-                      <div
-                        onClick={() => {
-                          setBaselineId("");
-                          setIsBaselineDropdownOpen(false);
-                        }}
-                        className={`px-3 py-2 rounded-xl cursor-pointer transition-all text-xs font-semibold flex items-center justify-between border ${
-                          baselineId === ""
-                            ? "bg-indigo-600/10 text-indigo-400 border-indigo-500/20" 
-                            : "text-gray-400 border-transparent hover:text-gray-200 hover:bg-white/[0.02]"
-                        }`}
-                      >
-                        <span>Select Baseline Run</span>
-                      </div>
-                      {allRuns.map(r => (
-                        <div
-                          key={r.id}
-                          onClick={() => {
-                            setBaselineId(r.id);
-                            setIsBaselineDropdownOpen(false);
-                          }}
-                          className={`px-3 py-2 rounded-xl cursor-pointer transition-all text-xs font-semibold flex items-center justify-between border ${
-                            baselineId === r.id
-                              ? "bg-indigo-600/10 text-indigo-400 border-indigo-500/20" 
-                              : "text-gray-400 border-transparent hover:text-gray-200 hover:bg-white/[0.02]"
-                          }`}
-                        >
-                          <span className="truncate pr-2">Run #{r.id} ({r.commit_sha?.substring(0, 7) || "manual"})</span>
-                          {baselineId === r.id && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
-                          )}
-                        </div>
-                      ))}
+        <form onSubmit={handleCompareSubmit} className="flex items-center gap-3 bg-white/[0.02] border border-white/[0.06] p-2.5 rounded-xl shadow-inner">
+          <div className="flex flex-col">
+            <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider px-0.5">Statistical Regression Check</label>
+            <div className="relative mt-1">
+              {allRuns.length > 0 ? (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setIsBaselineDropdownOpen(!isBaselineDropdownOpen)}
+                    className="flex items-center justify-between gap-2.5 bg-[#090a0f]/90 border border-indigo-500/30 hover:border-indigo-500/50 hover:bg-[#0d0e17] px-3.5 py-1.5 rounded-xl text-xs font-semibold text-gray-200 transition-all duration-200 cursor-pointer shadow-lg shadow-indigo-950/20 active:scale-[0.98] select-none min-w-[200px]"
+                  >
+                    <div className="flex items-center gap-1.5 truncate">
+                      <GitCommit className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                      <span className="truncate">
+                        {baselineId === ""
+                          ? "Select Baseline Run..."
+                          : `Run #${baselineId} (${allRuns.find((r: any) => r.id === baselineId)?.commit_sha?.substring(0, 7) || "manual"})`}
+                      </span>
                     </div>
-                  </>
-                )}
-              </div>
+                    <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform duration-200 shrink-0 ${isBaselineDropdownOpen ? "rotate-180 text-indigo-400" : ""}`} />
+                  </button>
+
+                  {isBaselineDropdownOpen && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-[99]" 
+                        onClick={() => setIsBaselineDropdownOpen(false)}
+                      />
+                      <div className="absolute right-0 mt-2 w-64 bg-[#090a0f]/95 border border-indigo-500/20 rounded-2xl shadow-2xl backdrop-blur-2xl p-1.5 z-[100] animate-fade-in space-y-1">
+                        <div className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest border-b border-white/[0.04] mb-1">
+                          Select Baseline Run
+                        </div>
+                        {allRuns.map((r: any) => {
+                          const isSelected = baselineId === r.id;
+                          return (
+                            <div
+                              key={r.id}
+                              onClick={() => {
+                                setBaselineId(r.id);
+                                setIsBaselineDropdownOpen(false);
+                              }}
+                              className={`px-3 py-2 rounded-xl cursor-pointer transition-all duration-150 text-xs flex items-center justify-between border ${
+                                isSelected
+                                  ? "bg-indigo-600/15 text-indigo-300 border-indigo-500/30 font-bold"
+                                  : "text-gray-300 border-transparent hover:bg-white/[0.04] hover:text-white"
+                              }`}
+                            >
+                              <div className="flex flex-col">
+                                <span className="font-mono font-bold text-gray-200">
+                                  Run #{r.id} <span className="text-[10px] text-gray-400 font-normal">({r.commit_sha ? r.commit_sha.substring(0, 7) : "manual"})</span>
+                                </span>
+                                <span className="text-[10px] text-gray-400 flex items-center gap-1 mt-0.5 font-mono">
+                                  <GitBranch className="h-3 w-3 text-indigo-400/70" />
+                                  {r.branch || "main"}
+                                </span>
+                              </div>
+                              {isSelected && <CheckCircle2 className="h-4 w-4 text-indigo-400 shrink-0" />}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <span className="text-xs text-gray-500 italic px-1">No prior runs to compare</span>
+              )}
             </div>
-            <button
-              type="submit"
-              disabled={!baselineId}
-              className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:bg-white/[0.04] disabled:text-gray-600 rounded-xl text-xs font-bold text-white transition-all duration-200 active:scale-95 shadow shadow-indigo-500/10 flex items-center gap-2"
-            >
-              <TrendingDown className="h-3.5 w-3.5" />
-              Verify Regression
-            </button>
-          </form>
-        )}
+          </div>
+          <button
+            type="submit"
+            disabled={!baselineId || allRuns.length === 0}
+            className="mt-4 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:from-gray-800 disabled:to-gray-800 disabled:text-gray-600 rounded-xl text-xs font-bold text-white transition-all duration-200 active:scale-95 shadow shadow-indigo-500/10 flex items-center gap-2 cursor-pointer disabled:cursor-not-allowed"
+          >
+            <TrendingDown className="h-3.5 w-3.5" />
+            Verify Regression
+          </button>
+        </form>
       </div>
 
       {run.system_prompt && (
-        <div className="glass-card rounded-2xl p-5 border border-white/[0.04] bg-[#0c0d12]/20 text-xs space-y-2 animate-fade-in shadow-xl">
+        <div className="glass-card rounded-2xl p-5 border border-white/[0.04] bg-[#0c0d12]/20 text-xs space-y-2 animate-fade-in shadow-xl relative z-20">
           <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest font-mono">System Prompt for Run #{run.id}</span>
           <pre className="font-mono text-gray-300 whitespace-pre-wrap select-text leading-relaxed bg-[#06070a]/40 p-4 rounded-xl border border-white/[0.03]">
             {run.system_prompt}
@@ -301,7 +312,7 @@ export default function RunDetail() {
       )}
 
       {/* Visual Metrics Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in relative z-10">
         <div className="glass-card rounded-2xl p-5 hover:shadow-indigo-500/5 hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between">
           <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Average Score</span>
           <div className="flex items-baseline gap-2 mt-2">
@@ -335,43 +346,46 @@ export default function RunDetail() {
       </div>
 
       {/* Filter and controls bar */}
-      <div className="glass-card rounded-2xl p-4.5 flex flex-wrap justify-between items-center gap-4 animate-fade-in">
+      <div className="glass-card rounded-2xl p-4.5 flex flex-wrap justify-between items-center gap-4 animate-fade-in relative z-20">
         <div className="flex flex-wrap items-center gap-5">
           {/* Category Dropdown */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
-              className="flex items-center gap-2.5 bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] hover:bg-white/[0.03] px-4.5 py-2 rounded-xl text-xs font-bold text-gray-200 shadow-inner cursor-pointer select-none active:scale-[0.98]"
+              className="flex items-center gap-2.5 bg-[#090a0f]/90 border border-white/[0.08] hover:border-indigo-500/30 hover:bg-[#0d0e17] px-4 py-2 rounded-xl text-xs font-bold text-gray-200 shadow-lg cursor-pointer select-none active:scale-[0.98] transition-all"
             >
-              <Filter className="h-3.5 w-3.5 text-gray-500" />
-              <span className="text-indigo-400 font-extrabold uppercase tracking-wider text-[9px]">Category:</span>
-              <span className="font-extrabold tracking-tight">{categoryFilter === "all" ? "All Intents" : categoryFilter}</span>
-              <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${isCategoryDropdownOpen ? "rotate-180" : ""}`} />
+              <Filter className="h-3.5 w-3.5 text-indigo-400" />
+              <span className="text-gray-400 uppercase tracking-wider text-[9px] font-bold">Category:</span>
+              <span className="font-bold text-indigo-300">{categoryFilter === "all" ? "All Intents" : categoryFilter}</span>
+              <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform duration-200 ${isCategoryDropdownOpen ? "rotate-180 text-indigo-400" : ""}`} />
             </button>
 
             {isCategoryDropdownOpen && (
               <>
                 <div 
-                  className="fixed inset-0 z-40" 
+                  className="fixed inset-0 z-[99]" 
                   onClick={() => setIsCategoryDropdownOpen(false)}
                 />
                 
-                <div className="absolute left-0 mt-2 w-56 bg-[#090a0f]/95 border border-white/[0.06] rounded-2xl shadow-2xl backdrop-blur-xl p-2.5 z-50 animate-fade-in space-y-1">
+                <div className="absolute left-0 mt-2 w-56 bg-[#090a0f]/95 border border-indigo-500/20 rounded-2xl shadow-2xl backdrop-blur-2xl p-2 z-[100] animate-fade-in space-y-1">
+                  <div className="px-3 py-1 text-[10px] font-bold text-gray-500 uppercase tracking-widest border-b border-white/[0.04] mb-1">
+                    Filter Intent Categories
+                  </div>
                   <div
                     onClick={() => {
                       setCategoryFilter("all");
                       setIsCategoryDropdownOpen(false);
                     }}
-                    className={`px-3 py-2 rounded-xl cursor-pointer transition-all text-xs font-semibold flex items-center justify-between border ${
+                    className={`px-3 py-2 rounded-xl cursor-pointer transition-all duration-150 text-xs font-semibold flex items-center justify-between border ${
                       categoryFilter === "all" 
-                        ? "bg-indigo-600/10 text-indigo-400 border-indigo-500/20 shadow-sm shadow-indigo-500/5" 
-                        : "text-gray-400 border-transparent hover:text-gray-200 hover:bg-white/[0.02]"
+                        ? "bg-indigo-600/15 text-indigo-300 border-indigo-500/30 font-bold" 
+                        : "text-gray-300 border-transparent hover:text-white hover:bg-white/[0.04]"
                     }`}
                   >
                     <span>All Intents</span>
                     {categoryFilter === "all" && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
+                      <CheckCircle2 className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
                     )}
                   </div>
                   {categories.map(cat => (
@@ -381,15 +395,15 @@ export default function RunDetail() {
                         setCategoryFilter(cat);
                         setIsCategoryDropdownOpen(false);
                       }}
-                      className={`px-3 py-2 rounded-xl cursor-pointer transition-all text-xs font-semibold flex items-center justify-between border ${
+                      className={`px-3 py-2 rounded-xl cursor-pointer transition-all duration-150 text-xs font-semibold flex items-center justify-between border ${
                         categoryFilter === cat 
-                          ? "bg-indigo-600/10 text-indigo-400 border-indigo-500/20 shadow-sm shadow-indigo-500/5" 
-                          : "text-gray-400 border-transparent hover:text-gray-200 hover:bg-white/[0.02]"
+                          ? "bg-indigo-600/15 text-indigo-300 border-indigo-500/30 font-bold" 
+                          : "text-gray-300 border-transparent hover:text-white hover:bg-white/[0.04]"
                       }`}
                     >
-                      <span className="truncate pr-2">{cat}</span>
+                      <span>{cat}</span>
                       {categoryFilter === cat && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
+                        <CheckCircle2 className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
                       )}
                     </div>
                   ))}
@@ -524,6 +538,31 @@ export default function RunDetail() {
                                     {res.rationale}
                                   </div>
                                 </div>
+
+                                {/* Decomposed Rubric Badges */}
+                                {res.rubric_scores && Object.keys(res.rubric_scores).length > 0 && (
+                                  <div className="space-y-1.5">
+                                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Rubric Breakdown</span>
+                                    <div className="flex flex-wrap gap-2 pt-0.5">
+                                      {Object.entries(res.rubric_scores).map(([rubricKey, rubricVal]) => (
+                                        <span 
+                                          key={rubricKey} 
+                                          className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-lg border flex items-center gap-1.5 ${
+                                            rubricVal >= 0.9 
+                                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+                                              : rubricVal >= 0.7
+                                                ? "bg-amber-500/10 border-amber-500/20 text-amber-300"
+                                                : "bg-red-500/10 border-red-500/20 text-red-300"
+                                          }`}
+                                        >
+                                          <span className="capitalize">{rubricKey.replace(/_/g, " ")}:</span>
+                                          <span className="font-bold">{rubricVal.toFixed(2)}</span>
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
                                 <div className="flex justify-between text-gray-500 font-mono text-[10px]">
                                   <span>Latency: {res.latency_ms.toFixed(0)} ms</span>
                                   <span>Tokens: {res.token_count}</span>

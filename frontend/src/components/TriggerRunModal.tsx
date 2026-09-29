@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { X, Play, RotateCw, AlertTriangle, Cpu, ChevronDown } from "lucide-react";
+import { X, Play, RotateCw, AlertTriangle, Cpu, ChevronDown, CheckCircle2 } from "lucide-react";
 
 const API_URL = "http://localhost:8000";
 
@@ -222,50 +222,56 @@ export default function TriggerRunModal({
               <button
                 type="button"
                 onClick={() => setIsProviderDropdownOpen(!isProviderDropdownOpen)}
-                className="w-full text-left flex items-center justify-between glass-input rounded-xl px-4 py-2.5 text-xs text-gray-205 focus:outline-none cursor-pointer select-none active:scale-[0.98]"
+                className="w-full text-left flex items-center justify-between bg-[#090a0f]/90 border border-indigo-500/30 hover:border-indigo-500/50 hover:bg-[#0d0e17] px-4 py-2.5 rounded-xl text-xs font-bold text-gray-200 focus:outline-none cursor-pointer select-none active:scale-[0.98] transition-all shadow-lg shadow-indigo-950/20"
               >
-                <span>
+                <span className="font-bold text-indigo-300">
                   {provider === "" && "Suite Default"}
                   {provider === "openai" && "OpenAI"}
                   {provider === "anthropic" && "Anthropic (Claude)"}
                   {provider === "ollama" && "Ollama (Local)"}
                   {provider === "sglang" && "SGLang (Local)"}
                 </span>
-                <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${isProviderDropdownOpen ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform duration-200 ${isProviderDropdownOpen ? "rotate-180 text-indigo-400" : ""}`} />
               </button>
 
               {isProviderDropdownOpen && (
                 <>
                   <div 
-                    className="fixed inset-0 z-40" 
+                    className="fixed inset-0 z-[110]" 
                     onClick={() => setIsProviderDropdownOpen(false)}
                   />
-                  <div className="absolute left-0 mt-1 w-full bg-[#090a0f]/95 border border-white/[0.06] rounded-2xl shadow-2xl backdrop-blur-xl p-2 z-50 animate-fade-in space-y-1">
+                  <div className="absolute left-0 mt-2 w-full bg-[#090a0f]/95 border border-indigo-500/20 rounded-2xl shadow-2xl backdrop-blur-2xl p-2 z-[120] animate-fade-in space-y-1">
+                    <div className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest border-b border-white/[0.04] mb-1">
+                      Select Target Provider
+                    </div>
                     {[
                       { val: "", label: "Suite Default" },
                       { val: "openai", label: "OpenAI" },
                       { val: "anthropic", label: "Anthropic (Claude)" },
                       { val: "ollama", label: "Ollama (Local)" },
                       { val: "sglang", label: "SGLang (Local)" }
-                    ].map(opt => (
-                      <div
-                        key={opt.val}
-                        onClick={() => {
-                          setProvider(opt.val);
-                          setIsProviderDropdownOpen(false);
-                        }}
-                        className={`px-3 py-2 rounded-xl cursor-pointer transition-all text-xs font-semibold flex items-center justify-between border ${
-                          provider === opt.val
-                            ? "bg-indigo-600/10 text-indigo-400 border-indigo-500/20 shadow-sm shadow-indigo-500/5" 
-                            : "text-gray-400 border-transparent hover:text-gray-200 hover:bg-white/[0.02]"
-                        }`}
-                      >
-                        <span>{opt.label}</span>
-                        {provider === opt.val && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
-                        )}
-                      </div>
-                    ))}
+                    ].map(opt => {
+                      const isSelected = provider === opt.val;
+                      return (
+                        <div
+                          key={opt.val}
+                          onClick={() => {
+                            setProvider(opt.val);
+                            setIsProviderDropdownOpen(false);
+                          }}
+                          className={`px-3 py-2 rounded-xl cursor-pointer transition-all duration-150 text-xs font-semibold flex items-center justify-between border ${
+                            isSelected
+                              ? "bg-indigo-600/15 text-indigo-300 border-indigo-500/30 font-bold" 
+                              : "text-gray-300 border-transparent hover:text-white hover:bg-white/[0.04]"
+                          }`}
+                        >
+                          <span>{opt.label}</span>
+                          {isSelected && (
+                            <CheckCircle2 className="h-4 w-4 text-indigo-400 shrink-0" />
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </>
               )}

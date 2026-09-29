@@ -31,6 +31,12 @@ interface StatisticalReport {
   ci_upper: number;
   outcome: "REGRESSION" | "IMPROVEMENT" | "NO_CHANGE";
   is_significant: boolean;
+  test_method?: string;
+  cliffs_delta?: number;
+  effect_size_magnitude?: "NEGLIGIBLE" | "SMALL" | "MEDIUM" | "LARGE";
+  cohens_d?: number;
+  sample_size?: number;
+  sample_size_warning?: boolean;
 }
 
 export default function CompareRuns() {
@@ -105,6 +111,12 @@ export default function CompareRuns() {
   const axisMin = Math.min(-0.1, report.ci_lower - 0.05);
   const axisMax = Math.max(0.1, report.ci_upper + 0.05);
 
+  const testLabel = report.test_method === "WILCOXON_SIGNED_RANK" 
+    ? "Wilcoxon Signed-Rank (Paired)" 
+    : report.test_method === "MANN_WHITNEY_U" 
+      ? "Mann-Whitney U (Unpaired)" 
+      : "Hypothesis Test";
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Back navigation */}
@@ -116,12 +128,17 @@ export default function CompareRuns() {
           <ArrowLeft className="h-4 w-4" />
           Back to Run #{runId}
         </Link>
-        <button 
-          onClick={fetchComparison} 
-          className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 font-bold transition-colors duration-200"
-        >
-          <RefreshCw className="h-3 w-3" /> Re-calculate
-        </button>
+        <div className="flex items-center gap-3">
+          <span className="text-xs px-2.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 font-mono">
+            {testLabel}
+          </span>
+          <button 
+            onClick={fetchComparison} 
+            className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 font-bold transition-colors duration-200"
+          >
+            <RefreshCw className="h-3 w-3" /> Re-calculate
+          </button>
+        </div>
       </div>
 
       {/* Decision Banner */}
@@ -134,7 +151,7 @@ export default function CompareRuns() {
             <div>
               <h3 className="font-extrabold text-red-100 text-lg tracking-tight">Warning: Statistically Significant Regression Detected</h3>
               <p className="text-gray-400 text-sm mt-1.5 leading-relaxed">
-                The candidate run shows a statistically significant degradation in evaluation score ($p$-value = {report.p_value.toFixed(6)}). 
+                The candidate run shows a statistically significant degradation in evaluation score ($p$-value = {report.p_value.toFixed(6)}, Effect Size = {report.cliffs_delta !== undefined ? report.cliffs_delta.toFixed(3) : "N/A"}). 
                 The 95% confidence interval is entirely below zero.
               </p>
             </div>
@@ -148,7 +165,7 @@ export default function CompareRuns() {
             <div>
               <h3 className="font-extrabold text-emerald-100 text-lg tracking-tight">Success: Candidate shows statistically significant improvement</h3>
               <p className="text-gray-400 text-sm mt-1.5 leading-relaxed">
-                The candidate run demonstrates a statistically significant improvement in evaluation performance ($p$-value = {report.p_value.toFixed(6)}).
+                The candidate run demonstrates a statistically significant improvement in evaluation performance ($p$-value = {report.p_value.toFixed(6)}, Effect Size = {report.cliffs_delta !== undefined ? report.cliffs_delta.toFixed(3) : "N/A"}).
                 The 95% confidence interval is entirely above zero.
               </p>
             </div>
@@ -171,7 +188,7 @@ export default function CompareRuns() {
       </div>
 
       {/* Primary Metrics Panel */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         {/* Baseline Mean */}
         <div className="glass-card rounded-2xl p-5 flex flex-col justify-between hover:shadow-indigo-500/5 hover:-translate-y-0.5 transition-all duration-300">
           <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Baseline Mean</span>
@@ -196,12 +213,26 @@ export default function CompareRuns() {
 
         {/* P-Value */}
         <div className="glass-card rounded-2xl p-5 flex flex-col justify-between hover:shadow-indigo-500/5 hover:-translate-y-0.5 transition-all duration-300">
-          <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Mann-Whitney P-Value</span>
+          <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">P-Value ({report.test_method === "WILCOXON_SIGNED_RANK" ? "Paired" : "Unpaired"})</span>
           <span className={`text-3xl font-black mt-2 bg-clip-text text-transparent ${isSig ? "bg-gradient-to-r from-red-400 to-pink-500" : "bg-gradient-to-r from-emerald-400 to-teal-400"}`}>
             {report.p_value.toFixed(6)}
           </span>
         </div>
+
+        {/* Cliff's Delta Effect Size */}
+        <div className="glass-card rounded-2xl p-5 flex flex-col justify-between hover:shadow-indigo-500/5 hover:-translate-y-0.5 transition-all duration-300">
+          <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Effect Size (Cliff's d)</span>
+          <div className="flex items-baseline gap-2 mt-2">
+            <span className="text-2xl font-black text-white">
+              {report.cliffs_delta !== undefined ? (report.cliffs_delta > 0 ? `+${report.cliffs_delta.toFixed(2)}` : report.cliffs_delta.toFixed(2)) : "0.00"}
+            </span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-gray-300 font-semibold uppercase">
+              {report.effect_size_magnitude || "NEGLIGIBLE"}
+            </span>
+          </div>
+        </div>
       </div>
+
 
       {/* Recharts Confidence Interval Visualizer */}
       <div className="glass-card rounded-2xl p-6 space-y-4">

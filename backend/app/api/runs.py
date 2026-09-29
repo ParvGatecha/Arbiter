@@ -114,7 +114,7 @@ async def compare_evaluation_runs(
     db: AsyncSession = Depends(get_db_session)
 ):
     """
-    Fetches all results for both runs, extracts the scores,
+    Fetches all results for both runs, aligns scores by test_case_id for paired testing,
     feeds them into compute_regression_analysis, and returns the StatisticalReport.
     """
     candidate_run = await db.get(EvaluationRun, run_id)
@@ -122,16 +122,28 @@ async def compare_evaluation_runs(
     if not candidate_run or not baseline_run:
         raise HTTPException(status_code=404, detail="One or both evaluation runs not found")
 
-    # Fetch candidate scores
-    cand_stmt = select(EvaluationResult.score).where(EvaluationResult.run_id == run_id)
-    cand_result = await db.execute(cand_stmt)
-    cand_scores = list(cand_result.scalars().all())
+    # Fetch candidate scores with test_case_id
+    cand_stmt = select(EvaluationResult.test_case_id, EvaluationResult.score).where(EvaluationResult.run_id == run_id)
+    cand_res = (await db.execute(cand_stmt)).all()
+    cand_map = {row[0]: row[1] for row in cand_res}
 
-    # Fetch baseline scores
-    base_stmt = select(EvaluationResult.score).where(EvaluationResult.run_id == baseline_run_id)
-    base_result = await db.execute(base_stmt)
-    base_scores = list(base_result.scalars().all())
+    # Fetch baseline scores with test_case_id
+    base_stmt = select(EvaluationResult.test_case_id, EvaluationResult.score).where(EvaluationResult.run_id == baseline_run_id)
+    base_res = (await db.execute(base_stmt)).all()
+    base_map = {row[0]: row[1] for row in base_res}
+
+    # Find common test cases to enable paired comparison
+    common_case_ids = [cid for cid in cand_map if cid in base_map]
+    if common_case_ids and len(common_case_ids) == len(cand_map) == len(base_map):
+        cand_scores = [cand_map[cid] for cid in common_case_ids]
+        base_scores = [base_map[cid] for cid in common_case_ids]
+        paired = True
+    else:
+        cand_scores = [row[1] for row in cand_res]
+        base_scores = [row[1] for row in base_res]
+        paired = False
 
     # Compute regression metrics
-    report = compute_regression_analysis(base_scores, cand_scores)
+    report = compute_regression_analysis(base_scores, cand_scores, paired=paired)
     return report
+

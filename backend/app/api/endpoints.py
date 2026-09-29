@@ -6,7 +6,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from pydantic import BaseModel, Field
 
 from backend.app.core.database import get_db_session, async_session_maker
-from backend.app.models.db_models import Project, TestSuite, TestCase, EvaluationRun, EvaluationResult
+from backend.app.models.db_models import Project, TestSuite, TestCase, EvaluationRun, EvaluationResult, GatewayLog, SecurityEvent
 from backend.app.services.adversarial import generate_adversarial_variants
 from backend.app.tasks.evaluation import run_evaluation_batch_task
 
@@ -37,10 +37,17 @@ class TestCaseCreate(BaseModel):
     intent_category: str
     adversarial_flag: bool = False
 
+class PromoteLogRequest(BaseModel):
+    suite_id: int
+    intent_category: Optional[str] = "production_mined"
+    expected_output: Optional[str] = None
+    adversarial_flag: Optional[bool] = False
+
 class EvaluationRunCreate(BaseModel):
     suite_id: int
     commit_sha: Optional[str] = None
     branch: Optional[str] = None
+
 
 # --- API Endpoints ---
 
@@ -164,3 +171,44 @@ async def create_test_case(case_in: TestCaseCreate, db: AsyncSession = Depends(g
     await db.commit()
     await db.refresh(case)
     return case
+
+@router.post("/gateway/logs/{log_id}/promote-to-testcase", response_model=TestCase, status_code=status.HTTP_201_CREATED)
+async def promote_gateway_log_to_testcase(
+    log_id: int,
+    req: PromoteLogRequest,
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Production-to-Benchmark Flywheel: Promotes a live GatewayLog (e.g. flagged query or failure mode)
+    directly into a regression TestSuite as an active TestCase.
+    """
+    gateway_log = await db.get(GatewayLog, log_id)
+    if not gateway_log:
+        raise HTTPException(status_code=404, detail="GatewayLog entry not found")
+    
+    suite = await db.get(TestSuite, req.suite_id)
+    if not suite:
+        raise HTTPException(status_code=404, detail="Target TestSuite not found")
+    
+    # Auto-detect intent category or adversarial flag if linked security events exist
+    stmt = select(SecurityEvent).where(SecurityEvent.gateway_log_id == log_id)
+    res = await db.execute(stmt)
+    sec_events = res.scalars().all()
+    
+    adversarial_flag = req.adversarial_flag or (len(sec_events) > 0)
+    intent_category = req.intent_category or "production_mined"
+    if sec_events and intent_category == "production_mined":
+        intent_category = sec_events[0].threat_category.lower().replace(" ", "_")
+
+    test_case = TestCase(
+        suite_id=suite.id,
+        input_prompt=gateway_log.prompt_text,
+        expected_output=req.expected_output,
+        intent_category=intent_category,
+        adversarial_flag=adversarial_flag
+    )
+    db.add(test_case)
+    await db.commit()
+    await db.refresh(test_case)
+    return test_case
+

@@ -181,6 +181,7 @@ class EvaluationResult(SQLModel, table=True):
     test_case_id: int = Field(foreign_key="testcase.id")
     actual_output: str
     score: float = Field(default=0.0)  # 0.0 to 1.0
+    rubric_scores: Dict[str, float] = Field(default_factory=dict, sa_column=Column(JSON))
     rationale: str
     latency_ms: float = Field(default=0.0)
     token_count: int = Field(default=0)
@@ -189,3 +190,4 @@ class EvaluationResult(SQLModel, table=True):
     # Relationships
     run: EvaluationRun = Relationship(back_populates="results")
     test_case: TestCase = Relationship(back_populates="results")
+
